@@ -93,7 +93,7 @@ def transform_to_gemini_format(openai_request_data):
     GEMINI_BOILERPLATE = {
       "runSettings": {
         "temperature": 0.3,
-        "model": "models/gemini-2.5-pro"
+        "model": "models/gemini-2.5-pro",
         "topP": 0.95,
         "topK": 64,
         "maxOutputTokens": 65536,
