@@ -10,7 +10,7 @@ import webbrowser
 
 # --- Configuration ---
 HOST = '127.0.0.1'
-PORT = 5000
+PORT = 8383
 LOG_FILE = 'api_requests.log'
 
 # --- Flask App Initialization ---
@@ -68,7 +68,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>Human-in-the-Loop API</h1>
         {% if request_in_progress %}
-            <h2>Incoming Request</h2>
+            <h2>Incoming Request (Transformed)</h2>
             <pre><code>{{ request_json }}</code></pre>
             
             <h2>Your Response</h2>
@@ -87,6 +87,80 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# --- NEW: Transformation Logic ---
+def transform_to_gemini_format(openai_request_data):
+    """
+    Transforms an OpenAI-style request to the Gemini-style format.
+    """
+    # This is the static boilerplate for the Gemini format you provided.
+    GEMINI_BOILERPLATE = {
+      "runSettings": {
+        "temperature": 1.0,
+        "model": "models/gemini-2.5-pro-preview-06-05",
+        "topP": 0.95,
+        "topK": 64,
+        "maxOutputTokens": 65536,
+        "safetySettings": [{
+          "category": "HARM_CATEGORY_HARASSMENT",
+          "threshold": "OFF"
+        }, {
+          "category": "HARM_CATEGORY_HATE_SPEECH",
+          "threshold": "OFF"
+        }, {
+          "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          "threshold": "OFF"
+        }, {
+          "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+          "threshold": "OFF"
+        }],
+        "responseMimeType": "text/plain",
+        "enableCodeExecution": False,
+        "enableSearchAsATool": False,
+        "enableBrowseAsATool": False,
+        "enableAutoFunctionResponse": False,
+        "thinkingBudget": -1
+      },
+      "systemInstruction": {},
+      "chunkedPrompt": {
+          "chunks": [],
+          "pendingInputs": [{"text": "", "role": "user"}]
+      }
+    }
+    
+    transformed_data = GEMINI_BOILERPLATE.copy()
+    chunks = []
+    
+    messages = openai_request_data.get("messages", [])
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content")
+
+        if role == "system":
+            # The system prompt becomes the systemInstruction content
+            transformed_data["systemInstruction"] = {"text": content}
+            continue
+
+        chunk = {}
+        if role == "assistant":
+            chunk["role"] = "model"
+            chunk["text"] = content
+            chunk["finishReason"] = "STOP"
+        elif role == "user":
+            chunk["role"] = "user"
+            # Handle cases where user content is a list of dicts
+            if isinstance(content, list):
+                text_parts = [part.get("text", "") for part in content if isinstance(part, dict)]
+                chunk["text"] = "\n".join(text_parts)
+            else:
+                chunk["text"] = content
+        
+        if chunk:
+            chunks.append(chunk)
+
+    transformed_data["chunkedPrompt"]["chunks"] = chunks
+    return transformed_data
+
+# --- Unchanged Functions ---
 def log_to_file(content):
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f"--- Log Entry: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
@@ -105,73 +179,78 @@ def index():
 @app.route('/submit', methods=['POST'])
 def submit():
     response_content = request.form.get('response_text', '[No response provided]')
-    if request_state["data"]:
+    # We will modify the original request data for the response, not the transformed one
+    if request_state.get("original_data"):
+         request_state["original_data"]["response"] = response_content
+    # Fallback for safety
+    elif request_state["data"]:
         request_state["data"]["response"] = response_content
     request_state["event"].set()
     return redirect(url_for('index'))
 
 def stream_generator(response_id, model_name, content):
-    """
-    This function generates the response in the Server-Sent Events (SSE)
-    format that streaming clients expect.
-    """
-    # 1. First chunk: Announces the role
     start_chunk = {
         "id": response_id, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name,
         "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
     }
     yield f"data: {json.dumps(start_chunk)}\n\n"
-    
-    # 2. Second chunk: Contains the actual content
     content_chunk = {
         "id": response_id, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name,
         "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}]
     }
     yield f"data: {json.dumps(content_chunk)}\n\n"
-
-    # 3. Final chunk: Signals the end of the message
     end_chunk = {
         "id": response_id, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name,
         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
     }
     yield f"data: {json.dumps(end_chunk)}\n\n"
-    
-    # 4. The [DONE] signal: The official end of the stream
     yield "data: [DONE]\n\n"
 
 
+# --- MODIFIED API Endpoint ---
 @app.route('/v1/chat/completions', methods=['POST'])
 def chat_completions():
     if request_state["event"].is_set():
         return jsonify({"error": "Server is busy processing another request."}), 503
 
     try:
+        # 1. Get the original request data
         request_data = request.get_json()
         is_streaming = request_data.get("stream", False)
+        
+        # 2. **Perform the transformation**
+        transformed_data = transform_to_gemini_format(request_data)
 
-        pretty_request = json.dumps(request_data, indent=2)
+        # 3. Use the transformed data for display, logging, and clipboard
+        pretty_request = json.dumps(transformed_data, indent=2)
         print("="*50)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] INCOMING REQUEST (Stream: {is_streaming})")
         print("="*50)
+        print("--- Original Request (for logging) ---")
+        log_to_file(json.dumps(request_data, indent=2))
+        print(json.dumps(request_data, indent=2))
+        print("\n--- Transformed Request (shown in UI) ---")
         print(pretty_request)
-        log_to_file(pretty_request)
         pyperclip.copy(pretty_request)
-        print("\n[INFO] Request logged and copied. Check your browser to respond.")
+        print("\n[INFO] Transformed request logged and copied. Check your browser to respond.")
 
-        request_state["data"] = request_data
+        # 4. Store BOTH original and transformed data in the global state
+        request_state["data"] = transformed_data # For the UI
+        request_state["original_data"] = request_data # To get the human response later
         request_state["event"].clear()
+        
+        # 5. Wait for the human to submit a response via the UI
         request_state["event"].wait()
 
-        human_response_content = request_state["data"].get("response", "[Error: Response not found]")
+        # 6. Retrieve the human response attached to the *original* data
+        human_response_content = request_state["original_data"].get("response", "[Error: Response not found]")
         response_id = f"chatcmpl-{uuid.uuid4().hex}"
         model_name = "human-in-the-loop-v1-webui"
 
         if is_streaming:
-            # --- HANDLE STREAMING REQUEST ---
             print("\n--- SENDING STREAMING RESPONSE ---")
             return Response(stream_generator(response_id, model_name, human_response_content), mimetype='text/event-stream')
         else:
-            # --- HANDLE NON-STREAMING REQUEST ---
             response_payload = {
                 "id": response_id, "object": "chat.completion", "created": int(time.time()), "model": model_name,
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": human_response_content}, "finish_reason": "stop"}],
@@ -185,15 +264,17 @@ def chat_completions():
         print(f"[ERROR] An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
+        # 7. Reset state for the next request
         request_state["data"] = None
+        request_state["original_data"] = None
         request_state["event"].set()
         request_state["event"].clear()
         print("\n[INFO] State reset. Waiting for next request...")
 
 
+# --- Unchanged Startup Logic ---
 def open_browser():
     webbrowser.open_new(f"http://{HOST}:{PORT}")
-
 
 if __name__ == '__main__':
     print("="*60)
@@ -201,6 +282,7 @@ if __name__ == '__main__':
     print("="*60)
     print("\nServer starting on http://{HOST}:{PORT}")
     print("This version supports both STREAMING and NON-STREAMING requests.")
+    print(">>> THIS VERSION TRANSFORMS OPENAI REQUESTS TO GEMINI FORMAT FOR DISPLAY <<<")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
     print("\nTo stop the server, press CTRL+C in this window.")
