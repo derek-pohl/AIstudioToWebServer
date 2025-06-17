@@ -12,6 +12,7 @@ import webbrowser
 HOST = '127.0.0.1'
 PORT = 8383
 LOG_FILE = 'api_requests.log'
+TRANSFORMED_REQUEST_FILE = 'CodeRequest' # The file to save the transformed request (no extension)
 
 # --- Flask App Initialization ---
 app = flask.Flask(__name__)
@@ -87,15 +88,11 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- NEW: Transformation Logic ---
+# --- Transformation Logic (Unchanged) ---
 def transform_to_gemini_format(openai_request_data):
-    """
-    Transforms an OpenAI-style request to the Gemini-style format.
-    """
-    # This is the static boilerplate for the Gemini format you provided.
     GEMINI_BOILERPLATE = {
       "runSettings": {
-        "temperature": 1.0,
+        "temperature": 0.3,
         "model": "models/gemini-2.5-pro-preview-06-05",
         "topP": 0.95,
         "topK": 64,
@@ -136,7 +133,6 @@ def transform_to_gemini_format(openai_request_data):
         content = message.get("content")
 
         if role == "system":
-            # The system prompt becomes the systemInstruction content
             transformed_data["systemInstruction"] = {"text": content}
             continue
 
@@ -147,7 +143,6 @@ def transform_to_gemini_format(openai_request_data):
             chunk["finishReason"] = "STOP"
         elif role == "user":
             chunk["role"] = "user"
-            # Handle cases where user content is a list of dicts
             if isinstance(content, list):
                 text_parts = [part.get("text", "") for part in content if isinstance(part, dict)]
                 chunk["text"] = "\n".join(text_parts)
@@ -179,10 +174,8 @@ def index():
 @app.route('/submit', methods=['POST'])
 def submit():
     response_content = request.form.get('response_text', '[No response provided]')
-    # We will modify the original request data for the response, not the transformed one
     if request_state.get("original_data"):
          request_state["original_data"]["response"] = response_content
-    # Fallback for safety
     elif request_state["data"]:
         request_state["data"]["response"] = response_content
     request_state["event"].set()
@@ -214,35 +207,43 @@ def chat_completions():
         return jsonify({"error": "Server is busy processing another request."}), 503
 
     try:
-        # 1. Get the original request data
         request_data = request.get_json()
         is_streaming = request_data.get("stream", False)
         
-        # 2. **Perform the transformation**
         transformed_data = transform_to_gemini_format(request_data)
-
-        # 3. Use the transformed data for display, logging, and clipboard
         pretty_request = json.dumps(transformed_data, indent=2)
+
         print("="*50)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] INCOMING REQUEST (Stream: {is_streaming})")
         print("="*50)
+        
+        # Log original request
         print("--- Original Request (for logging) ---")
         log_to_file(json.dumps(request_data, indent=2))
         print(json.dumps(request_data, indent=2))
+        
+        # Display, copy, and now SAVE the transformed request
         print("\n--- Transformed Request (shown in UI) ---")
         print(pretty_request)
         pyperclip.copy(pretty_request)
-        print("\n[INFO] Transformed request logged and copied. Check your browser to respond.")
+        
+        # --- Save the transformed request to 'CodeRequest' ---
+        try:
+            with open(TRANSFORMED_REQUEST_FILE, 'w', encoding='utf-8') as f:
+                f.write(pretty_request)
+            print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
+        except IOError as e:
+            print(f"\n[ERROR] Could not write to file '{TRANSFORMED_REQUEST_FILE}': {e}")
+        # --- END ---
 
-        # 4. Store BOTH original and transformed data in the global state
-        request_state["data"] = transformed_data # For the UI
-        request_state["original_data"] = request_data # To get the human response later
+        print("\n[INFO] Check your browser to respond.")
+
+        request_state["data"] = transformed_data
+        request_state["original_data"] = request_data
         request_state["event"].clear()
         
-        # 5. Wait for the human to submit a response via the UI
         request_state["event"].wait()
 
-        # 6. Retrieve the human response attached to the *original* data
         human_response_content = request_state["original_data"].get("response", "[Error: Response not found]")
         response_id = f"chatcmpl-{uuid.uuid4().hex}"
         model_name = "human-in-the-loop-v1-webui"
@@ -264,7 +265,6 @@ def chat_completions():
         print(f"[ERROR] An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        # 7. Reset state for the next request
         request_state["data"] = None
         request_state["original_data"] = None
         request_state["event"].set()
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     print("="*60)
     print("\nServer starting on http://{HOST}:{PORT}")
     print("This version supports both STREAMING and NON-STREAMING requests.")
-    print(">>> THIS VERSION TRANSFORMS OPENAI REQUESTS TO GEMINI FORMAT FOR DISPLAY <<<")
+    print(">>> THIS VERSION TRANSFORMS OPENAI REQUESTS AND SAVES TO 'CodeRequest' <<<")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
     print("\nTo stop the server, press CTRL+C in this window.")
