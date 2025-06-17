@@ -88,12 +88,12 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- Transformation Logic (Unchanged) ---
+# --- Transformation Logic (Unchanged) --- e/82&O(H@_Zb:7Z=2*frRs)LtWp(2q-sch%\bN=3PO6R?3'fJAc8^\<f{z4m{88V&]WT|9Mk97/v%w`lVNN(-B:fI)`}})
 def transform_to_gemini_format(openai_request_data):
     GEMINI_BOILERPLATE = {
       "runSettings": {
         "temperature": 0.3,
-        "model": "models/gemini-2.5-pro-preview-06-05",
+        "model": "models/gemini-2.5-pro"
         "topP": 0.95,
         "topK": 64,
         "maxOutputTokens": 65536,
