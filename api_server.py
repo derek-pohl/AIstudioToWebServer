@@ -1,12 +1,15 @@
 import flask
-from flask import request, jsonify, render_template_string, redirect, url_for, Response
+from flask import request, jsonify, Response
 import pyperclip
 import json
 from datetime import datetime
 import time
 import uuid
 import threading
-import webbrowser
+import asyncio
+import os
+from playwright.async_api import async_playwright
+import logging
 
 # --- Configuration ---
 HOST = '127.0.0.1'
@@ -14,79 +17,183 @@ PORT = 8383
 LOG_FILE = 'api_requests.log'
 TRANSFORMED_REQUEST_FILE = 'CodeRequest' # The file to save the transformed request (no extension)
 
+# --- AI Studio Configuration ---
+DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1fGd5atPaKuuVj8k5M8V4ZvblXHI9y95O'  # Replace with your Google Drive folder URL
+AISTUDIO_URL = 'https://aistudio.google.com/app/prompts/1krB5jGaqT9_5iNPGMcjTejpUfUE-g8v1'    # Replace with your AI Studio project URL
+BROWSER_DATA_DIR = './browser_data'  # Local browser data storage
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # --- Flask App Initialization ---
 app = flask.Flask(__name__)
 app.config['SECRET_KEY'] = 'a-super-secret-key-that-you-dont-need-to-change'
 
-# --- Global state management ---
-request_state = {
-    "data": None,
-    "event": threading.Event()
-}
-
-# --- HTML Template (Unchanged) ---
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% if not request_in_progress %}
-    <meta http-equiv="refresh" content="3">
-    {% endif %}
-    <title>Human-in-the-Loop API</title>
-    <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #1e1e1e; color: #d4d4d4; margin: 0; padding: 2rem;
-        }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1, h2 { color: #569cd6; border-bottom: 1px solid #444; padding-bottom: 10px; }
-        pre { 
-            background-color: #252526; border: 1px solid #444; padding: 15px; 
-            border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; 
-            font-family: "Consolas", "Courier New", monospace; font-size: 14px;
-        }
-        textarea {
-            width: 100%; box-sizing: border-box; background-color: #3c3c3c;
-            color: #d4d4d4; border: 1px solid #444; border-radius: 5px;
-            padding: 10px; font-family: inherit; font-size: 16px; height: 200px;
-            margin-top: 1rem;
-        }
-        button {
-            background-color: #0e639c; color: white; border: none; padding: 12px 20px;
-            border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 1rem;
-            display: block; width: 100%;
-        }
-        button:hover { background-color: #1177bb; }
-        .status-box {
-            background-color: #252526; border: 1px solid #444; padding: 20px;
-            border-radius: 5px; text-align: center; font-size: 1.2rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Human-in-the-Loop API</h1>
-        {% if request_in_progress %}
-            <h2>Incoming Request (Transformed)</h2>
-            <pre><code>{{ request_json }}</code></pre>
+# --- Browser Automation Class ---
+class AIStudioAutomation:
+    def __init__(self):
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.is_authenticated = False
+    
+    async def initialize_browser(self, headless=False):
+        """Initialize browser with persistent data"""
+        self.playwright = await async_playwright().start()
+        
+        # Ensure browser data directory exists
+        os.makedirs(BROWSER_DATA_DIR, exist_ok=True)
+        
+        self.browser = await self.playwright.chromium.launch_persistent_context(
+            user_data_dir=BROWSER_DATA_DIR,
+            headless=headless,
+            args=['--no-first-run', '--disable-blink-features=AutomationControlled']
+        )
+        
+        # Check if we have existing authentication
+        pages = self.browser.pages
+        if pages:
+            self.page = pages[0]
+        else:
+            self.page = await self.browser.new_page()
+        
+        await self.check_authentication()
+    
+    async def check_authentication(self):
+        """Check if user is authenticated with Google"""
+        try:
+            await self.page.goto('https://accounts.google.com/')
+            await self.page.wait_for_load_state('networkidle')
+              # Check if we're already logged in
+            current_url = self.page.url
+            if 'myaccount.google.com' in current_url or 'accounts.google.com/ManageAccount' in current_url:
+                self.is_authenticated = True
+                logging.info("User is already authenticated with Google")
+            else:
+                self.is_authenticated = False
+                logging.info("User needs to authenticate with Google")
+                
+        except Exception as e:
+            logging.error(f"Error checking authentication: {e}")
+            self.is_authenticated = False
+    
+    async def upload_to_drive(self, file_path):
+        """Upload file to Google Drive folder"""
+        try:
+            await self.page.goto(DRIVE_FOLDER_URL)
+            await self.page.wait_for_load_state('networkidle')
             
-            <h2>Your Response</h2>
-            <form action="/submit" method="post">
-                <textarea name="response_text" autofocus placeholder="Type or paste your response here..."></textarea>
-                <button type="submit">Send Response</button>
-            </form>
-        {% else %}
-            <div class="status-box">
-                <p>Waiting for a new request...</p>
-                <p>This page will automatically refresh.</p>
-            </div>
-        {% endif %}
-    </div>
-</body>
-</html>
-"""
+            # Use keyboard shortcut Alt+C then U to start upload
+            await self.page.keyboard.press('Alt+c')
+            await asyncio.sleep(0.5)
+            await self.page.keyboard.press('u')
+            
+            # Wait for file input to appear and handle file selection
+            await asyncio.sleep(2)
+            
+            # Try to find file input element
+            try:
+                file_input = await self.page.wait_for_selector('input[type="file"]', timeout=5000)
+                await file_input.set_input_files(file_path)
+            except:
+                # Alternative approach: use expect_file_chooser
+                async with self.page.expect_file_chooser() as fc_info:
+                    # Trigger file chooser if not already open
+                    await self.page.keyboard.press('Alt+c')
+                    await asyncio.sleep(0.5)
+                    await self.page.keyboard.press('u')
+                
+                file_chooser = await fc_info.value
+                await file_chooser.set_files(file_path)
+            
+            # Find and click the Upload button
+            try:
+                upload_button = self.page.get_by_role('button', name='Upload')
+                await upload_button.click()
+            except:
+                # Alternative selector for upload button
+                upload_button = await self.page.wait_for_selector('button:has-text("Upload")', timeout=5000)
+                await upload_button.click()
+            
+            # Wait for upload to complete
+            await asyncio.sleep(5)
+            logging.info(f"Successfully uploaded {file_path} to Drive")
+            
+        except Exception as e:
+            logging.error(f"Error uploading to Drive: {e}")
+            raise
+    
+    async def run_ai_studio_prompt(self):
+        """Navigate to AI Studio and run the prompt"""
+        try:
+            await self.page.goto(AISTUDIO_URL)
+            await self.page.wait_for_load_state('networkidle')
+            
+            # Find and click the Run button
+            run_button = self.page.locator('button[aria-label="Run"]')
+            await run_button.click()
+            
+            # Wait for the button to become disabled (processing)
+            await run_button.wait_for(state='attached')
+            
+            # Monitor the aria-disabled attribute
+            while True:
+                disabled_state = await run_button.get_attribute('aria-disabled')
+                if disabled_state == 'true':
+                    logging.info("AI Studio is processing...")
+                    break
+                await asyncio.sleep(0.5)
+            
+            # Wait for processing to complete
+            while True:
+                disabled_state = await run_button.get_attribute('aria-disabled')
+                if disabled_state == 'false':
+                    logging.info("AI Studio processing complete")
+                    break
+                await asyncio.sleep(1)
+            
+            # Wait additional 5 seconds as specified
+            await asyncio.sleep(5)
+            
+        except Exception as e:
+            logging.error(f"Error running AI Studio prompt: {e}")
+            raise
+    
+    async def copy_response(self):
+        """Copy the markdown response from AI Studio"""
+        try:
+            # Find and click the copy markdown button
+            copy_button = self.page.locator('button:has-text("Copy markdown")')
+            await copy_button.click()
+            
+            # Wait a moment for clipboard to update
+            await asyncio.sleep(1)
+            
+            # Get content from clipboard
+            response_content = pyperclip.paste()
+            logging.info("Successfully copied response from AI Studio")
+            
+            return response_content
+            
+        except Exception as e:
+            logging.error(f"Error copying response: {e}")
+            return "[Error: Could not retrieve response from AI Studio]"
+    
+    async def close(self):
+        """Clean up browser resources"""
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+    
+    def is_browser_ready(self):
+        """Check if browser is ready for use"""
+        return (self.browser is not None and 
+                not self.browser.is_closed() and 
+                self.page is not None)
+
+# Global automation instance
+automation = AIStudioAutomation()
 
 # --- Transformation Logic (Unchanged) --- e/82&O(H@_Zb:7Z=2*frRs)LtWp(2q-sch%\bN=3PO6R?3'fJAc8^\<f{z4m{88V&]WT|9Mk97/v%w`lVNN(-B:fI)`}})
 def transform_to_gemini_format(openai_request_data):
@@ -156,30 +263,12 @@ def transform_to_gemini_format(openai_request_data):
     return transformed_data
 
 # --- Unchanged Functions ---
+# --- Helper Functions ---
 def log_to_file(content):
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f"--- Log Entry: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
         f.write(content)
         f.write("\n\n")
-
-@app.route('/')
-def index():
-    request_json = json.dumps(request_state.get("data"), indent=2) if request_state.get("data") else None
-    return render_template_string(
-        HTML_TEMPLATE,
-        request_in_progress=bool(request_state.get("data")),
-        request_json=request_json
-    )
-
-@app.route('/submit', methods=['POST'])
-def submit():
-    response_content = request.form.get('response_text', '[No response provided]')
-    if request_state.get("original_data"):
-         request_state["original_data"]["response"] = response_content
-    elif request_state["data"]:
-        request_state["data"]["response"] = response_content
-    request_state["event"].set()
-    return redirect(url_for('index'))
 
 def stream_generator(response_id, model_name, content):
     start_chunk = {
@@ -199,13 +288,49 @@ def stream_generator(response_id, model_name, content):
     yield f"data: {json.dumps(end_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
+async def process_request_with_automation(transformed_data):
+    """Process the request using browser automation"""
+    browser_automation = None
+    try:
+        # Create a fresh browser instance for this request
+        browser_automation = AIStudioAutomation()
+        await browser_automation.initialize_browser(headless=False)
+        
+        # Check authentication
+        if not browser_automation.is_authenticated:
+            return "[Error: Not authenticated with Google. Please run the server first to authenticate.]"
+        
+        # Save transformed request to file
+        abs_file_path = os.path.abspath(TRANSFORMED_REQUEST_FILE)
+        with open(abs_file_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(transformed_data, indent=2))
+        
+        # Upload to Google Drive
+        await browser_automation.upload_to_drive(abs_file_path)
+        
+        # Run AI Studio prompt
+        await browser_automation.run_ai_studio_prompt()
+        
+        # Copy response
+        response_content = await browser_automation.copy_response()
+        
+        return response_content
+        
+    except Exception as e:
+        logging.error(f"Error in automation process: {e}")
+        return f"[Error: Automation failed - {str(e)}]"
+    finally:
+        # Clean up browser resources
+        if browser_automation:
+            try:
+                await browser_automation.close()
+            except:
+                pass
 
-# --- MODIFIED API Endpoint ---
+
+# --- API Endpoint ---
 @app.route('/v1/chat/completions', methods=['POST'])
 def chat_completions():
-    if request_state["event"].is_set():
-        return jsonify({"error": "Server is busy processing another request."}), 503
-
     try:
         request_data = request.get_json()
         is_streaming = request_data.get("stream", False)
@@ -222,39 +347,37 @@ def chat_completions():
         log_to_file(json.dumps(request_data, indent=2))
         print(json.dumps(request_data, indent=2))
         
-        # Display, copy, and now SAVE the transformed request
+        # Display, copy, and save the transformed request
         print("\n--- Transformed Request (shown in UI) ---")
         print(pretty_request)
         pyperclip.copy(pretty_request)
         
-        # --- Save the transformed request to 'CodeRequest' ---
+        print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
+        print("[INFO] Starting automated AI Studio process...")        # Process request using browser automation in the same event loop
         try:
-            with open(TRANSFORMED_REQUEST_FILE, 'w', encoding='utf-8') as f:
-                f.write(pretty_request)
-            print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
-        except IOError as e:
-            print(f"\n[ERROR] Could not write to file '{TRANSFORMED_REQUEST_FILE}': {e}")
-        # --- END ---
+            # Use a simple approach - create new loop each time but ensure browser is ready
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                ai_response_content = loop.run_until_complete(
+                    process_request_with_automation(transformed_data)
+                )
+            finally:
+                loop.close()
+        except Exception as e:
+            print(f"[ERROR] Automation failed: {e}")
+            ai_response_content = f"[Error: Automation failed - {str(e)}]"
 
-        print("\n[INFO] Check your browser to respond.")
-
-        request_state["data"] = transformed_data
-        request_state["original_data"] = request_data
-        request_state["event"].clear()
-        
-        request_state["event"].wait()
-
-        human_response_content = request_state["original_data"].get("response", "[Error: Response not found]")
         response_id = f"chatcmpl-{uuid.uuid4().hex}"
-        model_name = "human-in-the-loop-v1-webui"
+        model_name = "ai-studio-automated-v1"
 
         if is_streaming:
             print("\n--- SENDING STREAMING RESPONSE ---")
-            return Response(stream_generator(response_id, model_name, human_response_content), mimetype='text/event-stream')
+            return Response(stream_generator(response_id, model_name, ai_response_content), mimetype='text/event-stream')
         else:
             response_payload = {
                 "id": response_id, "object": "chat.completion", "created": int(time.time()), "model": model_name,
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": human_response_content}, "finish_reason": "stop"}],
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": ai_response_content}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             }
             print("\n--- SENDING NON-STREAMING RESPONSE ---")
@@ -264,28 +387,58 @@ def chat_completions():
     except Exception as e:
         print(f"[ERROR] An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
+
+async def setup_automation():
+    """Initialize browser automation for first-time authentication"""
+    temp_automation = AIStudioAutomation()
+    
+    print("Initializing browser automation...")
+    await temp_automation.initialize_browser(headless=False)
+    
+    if not temp_automation.is_authenticated:
+        print("="*60)
+        print("FIRST TIME SETUP REQUIRED")
+        print("="*60)
+        print("Please log in to your Google account in the browser window that opened.")
+        print("After logging in, close this program and restart it.")
+        print("Authentication state will be saved for future use.")
+        print("="*60)
+        
+        # Keep browser open for authentication
+        input("Press Enter after logging in to close the program...")
+        await temp_automation.close()
+        exit(0)
+    else:
+        print("Authentication verified. Ready to process requests.")
+        # Close the test browser
+        await temp_automation.close()
+
+def run_setup():
+    """Run initial setup if needed"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(setup_automation())
     finally:
-        request_state["data"] = None
-        request_state["original_data"] = None
-        request_state["event"].set()
-        request_state["event"].clear()
-        print("\n[INFO] State reset. Waiting for next request...")
-
-
-# --- Unchanged Startup Logic ---
-def open_browser():
-    webbrowser.open_new(f"http://{HOST}:{PORT}")
+        loop.close()
 
 if __name__ == '__main__':
     print("="*60)
-    print("      Human-in-the-Loop - OpenAI Compatible API Server (Web UI)")
+    print("   AI Studio Automated API Server - OpenAI Compatible")
     print("="*60)
-    print("\nServer starting on http://{HOST}:{PORT}")
+    print(f"\nServer starting on http://{HOST}:{PORT}")
     print("This version supports both STREAMING and NON-STREAMING requests.")
-    print(">>> THIS VERSION TRANSFORMS OPENAI REQUESTS AND SAVES TO 'CodeRequest' <<<")
+    print(">>> FULLY AUTOMATED VERSION USING PLAYWRIGHT <<<")
+    print("\nIMPORTANT: Configure these URLs at the top of the script:")
+    print(f"- DRIVE_FOLDER_URL: {DRIVE_FOLDER_URL}")
+    print(f"- AISTUDIO_URL: {AISTUDIO_URL}")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
     print("\nTo stop the server, press CTRL+C in this window.")
     
-    threading.Timer(1, open_browser).start()
+    # Run initial setup
+    run_setup()
+    
+    # Start the Flask server
     app.run(host=HOST, port=PORT, debug=False)
