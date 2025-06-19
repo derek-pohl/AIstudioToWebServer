@@ -14,6 +14,7 @@ import logging
 # --- Configuration ---
 HOST = '127.0.0.1'
 PORT = 8383
+HEADLESS_MODE = False  # Set to False to see the browser window during automation
 LOG_FILE = 'api_requests.log'
 TRANSFORMED_REQUEST_FILE = 'CodeRequest' # The file to save the transformed request (no extension)
 
@@ -37,8 +38,11 @@ class AIStudioAutomation:
         self.page = None
         self.is_authenticated = False
     
-    async def initialize_browser(self, headless=False):
+    async def initialize_browser(self, headless=None):
         """Initialize browser with persistent data"""
+        if headless is None:
+            headless = HEADLESS_MODE
+            
         self.playwright = await async_playwright().start()
         
         # Ensure browser data directory exists
@@ -47,8 +51,7 @@ class AIStudioAutomation:
         self.browser = await self.playwright.chromium.launch_persistent_context(
             user_data_dir=BROWSER_DATA_DIR,
             headless=headless,
-            args=['--no-first-run', '--disable-blink-features=AutomationControlled']
-        )
+            args=['--no-first-run', '--disable-blink-features=AutomationControlled']        )
         
         # Check if we have existing authentication
         pages = self.browser.pages
@@ -64,7 +67,8 @@ class AIStudioAutomation:
         try:
             await self.page.goto('https://accounts.google.com/')
             await self.page.wait_for_load_state('networkidle')
-              # Check if we're already logged in
+            
+            # Check if we're already logged in
             current_url = self.page.url
             if 'myaccount.google.com' in current_url or 'accounts.google.com/ManageAccount' in current_url:
                 self.is_authenticated = True
@@ -78,48 +82,81 @@ class AIStudioAutomation:
             self.is_authenticated = False
     
     async def upload_to_drive(self, file_path):
-        """Upload file to Google Drive folder"""
+        """Upload file to Google Drive folder using file chooser interception"""
         try:
             await self.page.goto(DRIVE_FOLDER_URL)
             await self.page.wait_for_load_state('networkidle')
             
-            # Use keyboard shortcut Alt+C then U to start upload
-            await self.page.keyboard.press('Alt+c')
-            await asyncio.sleep(0.5)
-            await self.page.keyboard.press('u')
-            
-            # Wait for file input to appear and handle file selection
+            # Wait for page to fully load
             await asyncio.sleep(2)
             
-            # Try to find file input element
-            try:
-                file_input = await self.page.wait_for_selector('input[type="file"]', timeout=5000)
-                await file_input.set_input_files(file_path)
-            except:
-                # Alternative approach: use expect_file_chooser
-                async with self.page.expect_file_chooser() as fc_info:
-                    # Trigger file chooser if not already open
+            logging.info(f"Uploading {os.path.basename(file_path)} using file chooser interception")
+            
+            # Set up file chooser interception before triggering the upload
+            async with self.page.expect_file_chooser() as fc_info:
+                # Try multiple methods to trigger file upload
+                try:
+                    # Method 1: Try the keyboard shortcut Alt+C, U
                     await self.page.keyboard.press('Alt+c')
                     await asyncio.sleep(0.5)
                     await self.page.keyboard.press('u')
-                
-                file_chooser = await fc_info.value
-                await file_chooser.set_files(file_path)
-              # Find and click the Upload button
+                except:
+                    try:
+                        # Method 2: Look for "New" button and click it, then look for upload option
+                        new_button = self.page.locator('button:has-text("New")')
+                        if await new_button.count() > 0:
+                            await new_button.click()
+                            await asyncio.sleep(1)
+                            
+                            # Look for file upload option
+                            upload_option = self.page.locator('text="File upload"')
+                            if await upload_option.count() > 0:
+                                await upload_option.click()
+                            else:
+                                # Try alternative text
+                                upload_option = self.page.locator('text="Upload"')
+                                await upload_option.click()
+                    except:
+                        # Method 3: Try right-click context menu
+                        await self.page.click('body', button='right')
+                        await asyncio.sleep(0.5)
+                        upload_option = self.page.locator('text="Upload"')
+                        if await upload_option.count() > 0:
+                            await upload_option.click()
+            
+            # Get the file chooser and set the file
+            file_chooser = await fc_info.value
+            await file_chooser.set_files(file_path)
+            
+            logging.info("File chooser intercepted and file set successfully")
+            
+            # Now we need to click the final "Upload" button that appears after file selection
+            # Wait a moment for the upload dialog to appear
+            await asyncio.sleep(2)
+            
+            # Find and click the Upload button using the exact method you specified
             try:
                 upload_button = self.page.get_by_role('button', name='Upload')
                 await upload_button.click()
-            except:
-                # Alternative selector for upload button
-                upload_button = await self.page.wait_for_selector('button:has-text("Upload")', timeout=5000)
-                await upload_button.click()
+                logging.info("Clicked Upload button successfully")
+            except Exception as e:
+                logging.warning(f"Could not find Upload button with get_by_role: {e}")
+                # Fallback methods
+                try:
+                    # Try alternative selector
+                    upload_button = self.page.locator('button:has-text("Upload")')
+                    await upload_button.click()
+                    logging.info("Clicked Upload button using fallback selector")
+                except Exception as e2:
+                    logging.error(f"Failed to click Upload button: {e2}")
+                    raise
             
-            # Wait for upload to complete
+            # Wait for upload to process
             await asyncio.sleep(5)
-            logging.info(f"Successfully uploaded {file_path} to Drive")
+            logging.info(f"File upload completed: {os.path.basename(file_path)}")
             
         except Exception as e:
-            logging.error(f"Error uploading to Drive: {e}")
+            logging.error(f"Error uploading to Drive using file chooser: {e}")
             raise
     
     async def run_ai_studio_prompt(self):
@@ -322,10 +359,9 @@ def stream_generator(response_id, model_name, content):
 async def process_request_with_automation(transformed_data):
     """Process the request using browser automation"""
     browser_automation = None
-    try:
-        # Create a fresh browser instance for this request
+    try:        # Create a fresh browser instance for this request
         browser_automation = AIStudioAutomation()
-        await browser_automation.initialize_browser(headless=False)
+        await browser_automation.initialize_browser()  # Uses HEADLESS_MODE setting
         
         # Check authentication
         if not browser_automation.is_authenticated:
@@ -424,7 +460,7 @@ async def setup_automation():
     temp_automation = AIStudioAutomation()
     
     print("Initializing browser automation...")
-    await temp_automation.initialize_browser(headless=False)
+    await temp_automation.initialize_browser()  # Uses HEADLESS_MODE setting
     
     if not temp_automation.is_authenticated:
         print("="*60)
@@ -461,9 +497,12 @@ if __name__ == '__main__':
     print(f"\nServer starting on http://{HOST}:{PORT}")
     print("This version supports both STREAMING and NON-STREAMING requests.")
     print(">>> FULLY AUTOMATED VERSION USING PLAYWRIGHT <<<")
+    print(f"\nBrowser Mode: {'HEADLESS' if HEADLESS_MODE else 'VISIBLE'}")
+    print("(Change HEADLESS_MODE at the top of the script to toggle)")
     print("\nIMPORTANT: Configure these URLs at the top of the script:")
     print(f"- DRIVE_FOLDER_URL: {DRIVE_FOLDER_URL}")
     print(f"- AISTUDIO_URL: {AISTUDIO_URL}")
+    print(f"- HEADLESS_MODE: {HEADLESS_MODE}")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
     print("\nTo stop the server, press CTRL+C in this window.")
