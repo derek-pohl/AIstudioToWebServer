@@ -196,8 +196,7 @@ class AIStudioAutomation:
             
             if wait_count >= max_wait_start:
                 logging.warning("Timeout waiting for processing to start - continuing anyway")
-            
-            # Wait for processing to complete - wait for aria-disabled to become false
+              # Wait for processing to complete - wait for aria-disabled to become false
             logging.info("Waiting for AI Studio to complete processing...")
             max_wait_complete = 5  # 5 seconds timeout to account for aistudio.google.com delay
             wait_count = 0
@@ -230,19 +229,60 @@ class AIStudioAutomation:
     async def copy_response(self):
         """Copy the markdown response from AI Studio"""
         try:
-            # Find and click the copy markdown button
-            copy_button = self.page.locator('button:has-text("Copy markdown")')
-            await copy_button.click()
+            logging.info("Finding options buttons on the page...")
             
-            # Wait a moment for clipboard to update
-            await asyncio.sleep(1)
+            # Find all options buttons and click the last one (most recent response)
+            options_buttons = self.page.locator('button[aria-label="Open options"]')
+            button_count = await options_buttons.count()
+            logging.info(f"Found {button_count} options buttons")
             
-            # Get content from clipboard
-            response_content = pyperclip.paste()
-            logging.info("Successfully copied response from AI Studio")
-            
-            return response_content
-            
+            if button_count > 0:
+                # Click the last options button (most recent response)
+                last_options_button = options_buttons.nth(button_count - 1)
+                
+                # Get the bounding box of the button to simulate more realistic mouse movement
+                button_box = await last_options_button.bounding_box()
+                if button_box:
+                    # Move mouse to the general area around the button first
+                    await self.page.mouse.move(button_box['x'] - 50, button_box['y'] - 50)
+                    await asyncio.sleep(0.2)
+                    
+                    # Move mouse closer to the button
+                    await self.page.mouse.move(button_box['x'] + button_box['width'] / 2, button_box['y'] + button_box['height'] / 2)
+                    await asyncio.sleep(0.3)
+                    
+                    # Hover over the button using the element hover method as well
+                    await last_options_button.hover()
+                    await asyncio.sleep(0.5)  # Wait longer for hover effect
+                    
+                    logging.info("Mouse positioned and hovered over options button")
+                else:
+                    # Fallback: just use element hover
+                    await last_options_button.hover()
+                    await asyncio.sleep(0.5)
+                
+                await last_options_button.click()
+                logging.info("Clicked options button")
+                
+                # Wait for menu to appear
+                await asyncio.sleep(0.5)
+                
+                # Find and click the copy markdown button
+                copy_button = self.page.locator('button:has-text("Copy markdown")')
+                await copy_button.click()
+                
+                # Wait for clipboard to update
+                await asyncio.sleep(1)
+                
+                # Get content from clipboard
+                response_content = pyperclip.paste()
+                logging.info("Successfully copied response from AI Studio")
+                
+                return response_content
+            else:
+                logging.error("No options buttons found")
+                return "[Error: Could not find options buttons]"
+                
         except Exception as e:
             logging.error(f"Error copying response: {e}")
             return "[Error: Could not retrieve response from AI Studio]"
