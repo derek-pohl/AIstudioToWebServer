@@ -180,7 +180,7 @@ class AIStudioAutomation:
             
             # Monitor the aria-disabled attribute - wait for it to become true (processing)
             logging.info("Waiting for AI Studio to start processing...")
-            max_wait_start = 30  # 30 seconds timeout
+            max_wait_start = 1000  # longest i've seen aistudio take to finish processing is 1000 seconds
             wait_count = 0
             
             while wait_count < max_wait_start:
