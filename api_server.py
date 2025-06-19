@@ -105,8 +105,7 @@ class AIStudioAutomation:
                 
                 file_chooser = await fc_info.value
                 await file_chooser.set_files(file_path)
-            
-            # Find and click the Upload button
+              # Find and click the Upload button
             try:
                 upload_button = self.page.get_by_role('button', name='Upload')
                 await upload_button.click()
@@ -131,28 +130,60 @@ class AIStudioAutomation:
             
             # Find and click the Run button
             run_button = self.page.locator('button[aria-label="Run"]')
+            
+            # Check initial state
+            initial_state = await run_button.get_attribute('aria-disabled')
+            logging.info(f"Initial button state: aria-disabled='{initial_state}'")
+            
             await run_button.click()
+            logging.info("Clicked Run button")
             
-            # Wait for the button to become disabled (processing)
-            await run_button.wait_for(state='attached')
+            # Wait a moment for the button state to change
+            await asyncio.sleep(2)
             
-            # Monitor the aria-disabled attribute
-            while True:
+            # Monitor the aria-disabled attribute - wait for it to become true (processing)
+            logging.info("Waiting for AI Studio to start processing...")
+            max_wait_start = 30  # 30 seconds timeout
+            wait_count = 0
+            
+            while wait_count < max_wait_start:
                 disabled_state = await run_button.get_attribute('aria-disabled')
+                logging.info(f"Button state check: aria-disabled='{disabled_state}'")
+                
                 if disabled_state == 'true':
                     logging.info("AI Studio is processing...")
                     break
-                await asyncio.sleep(0.5)
+                    
+                await asyncio.sleep(1)
+                wait_count += 1
             
-            # Wait for processing to complete
-            while True:
+            if wait_count >= max_wait_start:
+                logging.warning("Timeout waiting for processing to start - continuing anyway")
+            
+            # Wait for processing to complete - wait for aria-disabled to become false
+            logging.info("Waiting for AI Studio to complete processing...")
+            max_wait_complete = 5  # 5 seconds timeout to account for aistudio.google.com delay
+            wait_count = 0
+            
+            while wait_count < max_wait_complete:
                 disabled_state = await run_button.get_attribute('aria-disabled')
+                
                 if disabled_state == 'false':
                     logging.info("AI Studio processing complete")
                     break
+                    
+                # Log every 10 seconds to show progress
+                if wait_count % 10 == 0:
+                    logging.info(f"Still processing... (waited {wait_count} seconds)")
+                    
                 await asyncio.sleep(1)
+                wait_count += 1
+            
+            if wait_count >= max_wait_complete:
+                logging.warning("Timeout waiting for processing to complete - continuing anyway")
             
             # Wait additional 5 seconds as specified
+            logging.info("Waiting additional 5 seconds...")
             await asyncio.sleep(5)
             
         except Exception as e:
