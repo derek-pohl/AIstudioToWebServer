@@ -198,7 +198,7 @@ class AIStudioAutomation:
                 logging.warning("Timeout waiting for processing to start - continuing anyway")
               # Wait for processing to complete - wait for aria-disabled to become false
             logging.info("Waiting for AI Studio to complete processing...")
-            max_wait_complete = 5  # 5 seconds timeout to account for aistudio.google.com delay
+            max_wait_complete = 1  # 1 seconds timeout to account for aistudio.google.com delay
             wait_count = 0
             
             while wait_count < max_wait_complete:
