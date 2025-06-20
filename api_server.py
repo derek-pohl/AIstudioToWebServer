@@ -15,7 +15,7 @@ import logging
 HOST = '127.0.0.1'
 PORT = 8383
 HEADLESS_MODE = False  # Set to False to see the browser window during automation
-VISUAL_DEBUG_MODE = True  # Set to True to see visual cursor and button highlights during automation
+VISUAL_DEBUG_MODE = False  # Set to True to see visual cursor and button highlights during automation
 
 # Hover offset configuration (adjust these values to fine-tune hover positioning)
 HOVER_OFFSET_X = -15  # Negative values move left, positive values move right
@@ -170,6 +170,7 @@ class AIStudioAutomation:
         try:
             await self.page.goto(AISTUDIO_URL)
             await self.page.wait_for_load_state('networkidle')
+            await asyncio.sleep(1) # Wait for the run button to fully load
             
             # Find and click the Run button
             run_button = self.page.locator('button[aria-label="Run"]')
@@ -186,7 +187,7 @@ class AIStudioAutomation:
             
             # Monitor the aria-disabled attribute - wait for it to become true (processing)
             logging.info("Waiting for AI Studio to start processing...")
-            max_wait_start = 1000  # longest i've seen aistudio take to finish processing is 1000 seconds
+            max_wait_start = 1000  # longest i've seen aistudio take to finish processing is 1000 seconds for rextra long coding projects
             wait_count = 0
             
             while wait_count < max_wait_start:
@@ -497,7 +498,7 @@ def transform_to_gemini_format(openai_request_data):
     GEMINI_BOILERPLATE = {
       "runSettings": {
         "temperature": 0.3,
-        "model": "models/gemini-2.5-pro",
+        "model": "models/gemini-2.5-pro", # Must be adjusted in the future when google comes out with new models
         "topP": 0.95,
         "topK": 64,
         "maxOutputTokens": 65536,
