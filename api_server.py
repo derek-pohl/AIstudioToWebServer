@@ -15,6 +15,12 @@ import logging
 HOST = '127.0.0.1'
 PORT = 8383
 HEADLESS_MODE = False  # Set to False to see the browser window during automation
+VISUAL_DEBUG_MODE = True  # Set to True to see visual cursor and button highlights during automation
+
+# Hover offset configuration (adjust these values to fine-tune hover positioning)
+HOVER_OFFSET_X = -15  # Negative values move left, positive values move right
+HOVER_OFFSET_Y = 10   # Negative values move up, positive values move down
+
 LOG_FILE = 'api_requests.log'
 TRANSFORMED_REQUEST_FILE = 'CodeRequest' # The file to save the transformed request (no extension)
 
@@ -210,8 +216,7 @@ class AIStudioAutomation:
                     
                 # Log every 10 seconds to show progress
                 if wait_count % 10 == 0:
-                    logging.info(f"Still processing... (waited {wait_count} seconds)")
-                    
+                    logging.info(f"Still processing... (waited {wait_count} seconds)")                    
                 await asyncio.sleep(1)
                 wait_count += 1
             
@@ -231,6 +236,31 @@ class AIStudioAutomation:
         try:
             logging.info("Finding options buttons on the page...")
             
+            # Add visual debugging if enabled
+            if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                # Add visual cursor indicator CSS
+                await self.page.add_style_tag(content="""
+                    #visual-cursor {
+                        position: fixed;
+                        width: 20px;
+                        height: 20px;
+                        background: red;
+                        border: 2px solid yellow;
+                        border-radius: 50%;
+                        z-index: 9999;
+                        pointer-events: none;
+                        opacity: 0.8;
+                    }
+                """)
+                
+                # Add visual cursor element
+                await self.page.evaluate("""
+                    const cursor = document.createElement('div');
+                    cursor.id = 'visual-cursor';
+                    document.body.appendChild(cursor);
+                """)
+                logging.info("Visual debugging mode enabled - cursor indicator added")
+            
             # Find all options buttons and click the last one (most recent response)
             options_buttons = self.page.locator('button[aria-label="Open options"]')
             button_count = await options_buttons.count()
@@ -238,43 +268,188 @@ class AIStudioAutomation:
             
             if button_count > 0:
                 # Click the last options button (most recent response)
-                last_options_button = options_buttons.nth(button_count - 1)
-                
-                # Get the bounding box of the button to simulate more realistic mouse movement
+                last_options_button = options_buttons.nth(button_count - 1)                # Get the bounding box of the button to simulate more realistic mouse movement
                 button_box = await last_options_button.bounding_box()
+                logging.info(f"Button bounding box: {button_box}")
+                
                 if button_box:
-                    # Move mouse to the general area around the button first
-                    await self.page.mouse.move(button_box['x'] - 50, button_box['y'] - 50)
-                    await asyncio.sleep(0.2)
+                    # Calculate button center
+                    center_x = button_box['x'] + button_box['width'] / 2
+                    center_y = button_box['y'] + button_box['height'] / 2
+                      # Calculate hover target with offset (left and down from center)
+                    # These values can be adjusted in the configuration section at the top
+                    hover_offset_x = HOVER_OFFSET_X
+                    hover_offset_y = HOVER_OFFSET_Y
                     
-                    # Move mouse closer to the button
-                    await self.page.mouse.move(button_box['x'] + button_box['width'] / 2, button_box['y'] + button_box['height'] / 2)
-                    await asyncio.sleep(0.3)
+                    hover_x = center_x + hover_offset_x
+                    hover_y = center_y + hover_offset_y
+                    
+                    logging.info(f"Button center coordinates: ({center_x}, {center_y})")
+                    logging.info(f"Hover target coordinates: ({hover_x}, {hover_y}) [offset: x{hover_offset_x}, y{hover_offset_y}]")
+                    
+                    if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                        # Move visual cursor to starting position
+                        start_x = button_box['x'] - 50
+                        start_y = button_box['y'] - 50
+                        await self.page.evaluate(f"""
+                            document.getElementById('visual-cursor').style.left = '{start_x}px';
+                            document.getElementById('visual-cursor').style.top = '{start_y}px';
+                        """)
+                    
+                    # Move mouse to the general area around the button first
+                    start_x = button_box['x'] - 50
+                    start_y = button_box['y'] - 50
+                    await self.page.mouse.move(start_x, start_y)
+                    logging.info(f"Mouse moved to starting position: ({start_x}, {start_y})")
+                    await asyncio.sleep(1)  # Longer pause to see the movement
+                    
+                    if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                        # Move visual cursor to hover target (with offset)
+                        await self.page.evaluate(f"""
+                            document.getElementById('visual-cursor').style.left = '{hover_x}px';
+                            document.getElementById('visual-cursor').style.top = '{hover_y}px';
+                            document.getElementById('visual-cursor').style.background = 'lime';
+                        """)
+                    
+                    # Move mouse to the hover target (with offset)
+                    await self.page.mouse.move(hover_x, hover_y)
+                    logging.info(f"Mouse moved to hover target: ({hover_x}, {hover_y})")
+                    await asyncio.sleep(1)  # Longer pause to see the positioning
+                      # Change cursor color to indicate hover attempt
+                    if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                        await self.page.evaluate("""
+                            document.getElementById('visual-cursor').style.background = 'blue';
+                            document.getElementById('visual-cursor').style.transform = 'scale(1.5)';
+                        """)
                     
                     # Hover over the button using the element hover method as well
                     await last_options_button.hover()
-                    await asyncio.sleep(0.5)  # Wait longer for hover effect
+                    logging.info("Element hover() method called")
+                    await asyncio.sleep(2)  # Wait longer for hover effect to be visible
+                      # Highlight the button we're trying to click
+                    if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                        await self.page.evaluate(f"""
+                            const buttons = document.querySelectorAll('button[aria-label="Open options"]');
+                            const lastButton = buttons[buttons.length - 1];
+                            if (lastButton) {{
+                                lastButton.style.border = '3px solid red';
+                                lastButton.style.boxShadow = '0 0 10px red';
+                            }}
+                            
+                            // Add visual markers for button center and hover target
+                            const centerMarker = document.createElement('div');
+                            centerMarker.id = 'center-marker';
+                            centerMarker.style.cssText = `
+                                position: fixed;
+                                width: 8px;
+                                height: 8px;
+                                background: red;
+                                border: 1px solid white;
+                                border-radius: 50%;
+                                z-index: 10000;
+                                pointer-events: none;
+                                left: {center_x - 4}px;
+                                top: {center_y - 4}px;
+                            `;
+                            document.body.appendChild(centerMarker);
+                            
+                            const hoverMarker = document.createElement('div');
+                            hoverMarker.id = 'hover-marker';
+                            hoverMarker.style.cssText = `
+                                position: fixed;
+                                width: 12px;
+                                height: 12px;
+                                background: lime;
+                                border: 2px solid white;
+                                border-radius: 50%;
+                                z-index: 10001;
+                                pointer-events: none;
+                                left: {hover_x - 6}px;
+                                top: {hover_y - 6}px;
+                            `;
+                            document.body.appendChild(hoverMarker);
+                        """)
+                        
+                        logging.info("Button highlighted with red border and position markers added")
+                        logging.info("Red dot = button center, Green dot = hover target")
+                        await asyncio.sleep(2)  # Longer pause to see the markers
                     
-                    logging.info("Mouse positioned and hovered over options button")
                 else:
                     # Fallback: just use element hover
                     await last_options_button.hover()
-                    await asyncio.sleep(0.5)
+                    logging.info("Using fallback hover method")
+                    await asyncio.sleep(1)
+                
+                # Change cursor color to indicate click attempt
+                if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                    await self.page.evaluate("""
+                        document.getElementById('visual-cursor').style.background = 'orange';
+                        document.getElementById('visual-cursor').style.transform = 'scale(2)';
+                    """)
                 
                 await last_options_button.click()
                 logging.info("Clicked options button")
                 
-                # Wait for menu to appear
-                await asyncio.sleep(0.5)
+                # Wait for menu to appear and look for it
+                await asyncio.sleep(1)
+                
+                # Check if menu appeared
+                menu_items = await self.page.locator('button:has-text("Copy markdown")').count()
+                logging.info(f"Found {menu_items} 'Copy markdown' buttons")
+                
+                if menu_items == 0:
+                    # Try alternative selectors
+                    alt_selectors = [
+                        'text="Copy markdown"',
+                        '[role="menuitem"]:has-text("Copy")',
+                        'button:has-text("Copy")',
+                        '[aria-label*="Copy"]'
+                    ]
+                    
+                    for selector in alt_selectors:
+                        count = await self.page.locator(selector).count()
+                        logging.info(f"Alternative selector '{selector}': found {count} elements")
+                        if count > 0:
+                            break
                 
                 # Find and click the copy markdown button
                 copy_button = self.page.locator('button:has-text("Copy markdown")')
-                await copy_button.click()
+                  # Highlight the copy button if found
+                copy_count = await copy_button.count()
+                if copy_count > 0:
+                    if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                        await self.page.evaluate("""
+                            const copyButtons = document.querySelectorAll('button');
+                            for (let btn of copyButtons) {
+                                if (btn.textContent.includes('Copy markdown')) {
+                                    btn.style.border = '3px solid green';
+                                    btn.style.boxShadow = '0 0 10px green';
+                                }
+                            }
+                        """)
+                        logging.info("Copy markdown button highlighted")
+                        await asyncio.sleep(1)
+                    
+                    await copy_button.click()
+                    logging.info("Clicked copy markdown button")
+                else:
+                    logging.error("Copy markdown button not found after menu opened")
                 
                 # Wait for clipboard to update
-                await asyncio.sleep(1)
-                
-                # Get content from clipboard
+                await asyncio.sleep(2)
+                  # Remove visual indicators
+                if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                    await self.page.evaluate("""
+                        const cursor = document.getElementById('visual-cursor');
+                        if (cursor) cursor.remove();
+                        
+                        const centerMarker = document.getElementById('center-marker');
+                        if (centerMarker) centerMarker.remove();
+                        
+                        const hoverMarker = document.getElementById('hover-marker');
+                        if (hoverMarker) hoverMarker.remove();
+                    """)
+                  # Get content from clipboard
                 response_content = pyperclip.paste()
                 logging.info("Successfully copied response from AI Studio")
                 
@@ -284,7 +459,21 @@ class AIStudioAutomation:
                 return "[Error: Could not find options buttons]"
                 
         except Exception as e:
-            logging.error(f"Error copying response: {e}")
+            logging.error(f"Error copying response: {e}")            # Clean up visual indicators on error
+            if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
+                try:
+                    await self.page.evaluate("""
+                        const cursor = document.getElementById('visual-cursor');
+                        if (cursor) cursor.remove();
+                        
+                        const centerMarker = document.getElementById('center-marker');
+                        if (centerMarker) centerMarker.remove();
+                        
+                        const hoverMarker = document.getElementById('hover-marker');
+                        if (hoverMarker) hoverMarker.remove();
+                    """)
+                except:
+                    pass
             return "[Error: Could not retrieve response from AI Studio]"
     
     async def close(self):
@@ -303,7 +492,7 @@ class AIStudioAutomation:
 # Global automation instance
 automation = AIStudioAutomation()
 
-# --- Transformation Logic (Unchanged) --- e/82&O(H@_Zb:7Z=2*frRs)LtWp(2q-sch%\bN=3PO6R?3'fJAc8^\<f{z4m{88V&]WT|9Mk97/v%w`lVNN(-B:fI)`}})
+# --- Transformation Logic (Unchanged) ---
 def transform_to_gemini_format(openai_request_data):
     GEMINI_BOILERPLATE = {
       "runSettings": {
@@ -527,8 +716,7 @@ def run_setup():
     
     try:
         loop.run_until_complete(setup_automation())
-    finally:
-        loop.close()
+    finally:        loop.close()
 
 if __name__ == '__main__':
     print("="*60)
@@ -538,11 +726,20 @@ if __name__ == '__main__':
     print("This version supports both STREAMING and NON-STREAMING requests.")
     print(">>> FULLY AUTOMATED VERSION USING PLAYWRIGHT <<<")
     print(f"\nBrowser Mode: {'HEADLESS' if HEADLESS_MODE else 'VISIBLE'}")
-    print("(Change HEADLESS_MODE at the top of the script to toggle)")
+    print(f"Visual Debug Mode: {'ENABLED' if VISUAL_DEBUG_MODE and not HEADLESS_MODE else 'DISABLED'}")
+    print("(Change HEADLESS_MODE and VISUAL_DEBUG_MODE at the top of the script to toggle)")
     print("\nIMPORTANT: Configure these URLs at the top of the script:")
     print(f"- DRIVE_FOLDER_URL: {DRIVE_FOLDER_URL}")
     print(f"- AISTUDIO_URL: {AISTUDIO_URL}")
     print(f"- HEADLESS_MODE: {HEADLESS_MODE}")
+    print(f"- VISUAL_DEBUG_MODE: {VISUAL_DEBUG_MODE}")
+    print(f"- HOVER_OFFSET_X: {HOVER_OFFSET_X} (negative = left, positive = right)")
+    print(f"- HOVER_OFFSET_Y: {HOVER_OFFSET_Y} (negative = up, positive = down)")
+    print("\nWhen Visual Debug Mode is enabled, you'll see:")
+    print("- Red/Yellow cursor showing mouse position")
+    print("- Button highlighting (red borders)")
+    print("- Red dot = button center, Green dot = hover target")
+    print("- Color changes during different actions")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
     print("\nTo stop the server, press CTRL+C in this window.")
