@@ -158,7 +158,7 @@ class AIStudioAutomation:
                     raise
             
             # Wait for upload to process
-            await asyncio.sleep(5)
+            await asyncio.sleep(4)  # Adjust this as needed for internet speed, 4 is usually enough
             logging.info(f"File upload completed: {os.path.basename(file_path)}")
             
         except Exception as e:
@@ -223,9 +223,9 @@ class AIStudioAutomation:
             if wait_count >= max_wait_complete:
                 logging.warning("Timeout waiting for processing to complete - continuing anyway")
             
-            # Wait additional 5 seconds as specified
+            # Wait additional 1 seconds as sometimes AI studio takes a moment to finalize
             logging.info("Waiting additional 5 seconds...")
-            await asyncio.sleep(5)
+            await asyncio.sleep(1)
             
         except Exception as e:
             logging.error(f"Error running AI Studio prompt: {e}")
