@@ -1,6 +1,8 @@
 # AI Studio to Web Server
 
-A Flask-based web server that provides an OpenAI-compatible API interface for Google's AI Studio. This tool automates the process of sending prompts to AI Studio through browser automation, allowing you to use AI Studio models through standard OpenAI compatible API calls.
+A Flask-based web server that provides an OpenAI-compatible API interface for Google's AI Studio. This tool automates the process of sending prompts to AI Studio through browser automation, allowing you to use all State of the Art Gemini models through standard OpenAI compatible API calls.
+
+TLDR; The website aistudio.google.com allows the use of Google's Gemini AI models for free. The API, however, is not free. While this program is meant to be used for coding tools, the api can be used for any text based input or output, with any conversation history or system prompt.
 
 ## Features
 
@@ -8,12 +10,12 @@ A Flask-based web server that provides an OpenAI-compatible API interface for Go
 - **Browser Automation**: Uses Playwright to automate Google AI Studio interactions
 - **Google Drive Integration**: Automatically uploads request files to Google Drive
 - **Persistent Authentication**: Saves Google account login for future sessions
-- **Configurable Settings**: Extensive configuration options (change model, model tempature, etc) via JSON file
+- **Configurable Settings**: (change model, model tempature, etc) via JSON file
 
 ## How It Works
 
 1. **Request Reception**: Server receives OpenAI-format API request
-2. **Format Transformation**: Converts OpenAI format to Gemini/AI Studio format
+2. **Format Transformation**: Converts OpenAI request format to Gemini/AI Studio format
 3. **File Upload**: Saves transformed request and uploads to Google Drive
 4. **Browser Automation**: 
    - Navigates to AI Studio prompt URL
@@ -27,15 +29,15 @@ A Flask-based web server that provides an OpenAI-compatible API interface for Go
 - Python 3.7 or higher
 - Google account with access to AI Studio (any personal google account)
 - Money
-- Just kidding, this is entirely free. Maybe priceless!
+- Just kidding, this is entirely free. Maybe priceless, if you've been spending a ton of money on API calls before.
 
 ## One time User Setup
 
 - In your browser, with your personal (not work or school) google account logged in, go to [aistudio.google.com](aistudio.google.com)
-- Follow instructions, accept terms and such.
+- Follow instructions, read the Terms & Conditions, Privacy Policy, and Generative AI Use Policy, and accept.
 - Click on the settings gear in the top right, make sure Autosave is selected to on.
 - Select "Chat" from the top left or go to [https://aistudio.google.com/prompts/new_chat](https://aistudio.google.com/prompts/new_chat)
-- Type in anything to the chatbox. It doesn't matter! We do need this for later.
+- Type in anything to the chatbox and send it. It doesn't matter! We do need this for later. Maybe ask for the best code 
 - Click on the pencil next to the chat name. The chat name is based on what you typed in.
 - Edit the title to be "CodeRequest" and do not set a description.
 - Save the url you are currently at and put it in the aistudio_url part of the config.json file (example: https://aistudio.google.com/prompts/1XwZtRWO1_TiAb7S3Dnm9iveQzDj1cgbR)
@@ -66,8 +68,6 @@ Before running the server, you need to configure the `config.json` file:
 
 1. **Google Drive Folder URL**: Replace `FILL_IN_YOUR_FOLDER_URL` with your Google Drive folder URL for AI studio
 2. **AI Studio Prompt URL**: Replace `FILL_IN_YOUR_PROMPT_URL` with your AI Studio prompt URL
-
-
 
 ## Setup and First Run
 
@@ -134,8 +134,7 @@ AIstudioToWebServer/
 ## Security Notes
 
 - The server runs on localhost by default for security, no other computer on the network can connect to the API.
-- No API key validation is performed (again, intended for local use)
-- Browser data is stored locally for persistent authentication
+- Chats used in AI Studio (may) be read by humans, as outlined in [these terms.](https://ai.google.dev/gemini-api/terms)
 - Consider the security implications of saving authentication data of your google account to a folder on your pc.
 
 ### Other Configuration Options (You don't need to change these)
