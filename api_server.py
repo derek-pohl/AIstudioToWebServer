@@ -641,40 +641,55 @@ def stream_generator(response_id, model_name, content):
         "id": response_id, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name,
         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
     }
-    yield f"data: {json.dumps(end_chunk)}\n\n"
+    yield f"data: {{json.dumps(end_chunk)}}\n\n"
     yield "data: [DONE]\n\n"
 
 
 async def process_request_with_automation(transformed_data):
-    """Process the request using the global browser automation instance"""
-    try:
-        # Use the global automation instance, which should be initialized at startup
-        if not automation.is_browser_ready():
-            return "[Error: Browser is not initialized. Please restart the server.]"
+    """Process the request using the global browser automation instance, with retries."""
+    max_retries = 3
+    retry_delay = 5  # seconds
 
-        if not automation.is_authenticated:
-            # This could happen if the user was prompted to log in but hasn't yet.
-            return "[Error: Not authenticated with Google. Please log in via the browser window and try again.]"
-        
-        # Save transformed request to file
-        abs_file_path = os.path.abspath(TRANSFORMED_REQUEST_FILE)
-        with open(abs_file_path, 'w', encoding='utf-8') as f:
-            f.write(json.dumps(transformed_data, indent=2))
-        
-        # Upload to Google Drive
-        await automation.upload_to_drive(abs_file_path)
-        
-        # Run AI Studio prompt
-        await automation.run_ai_studio_prompt()
-        
-        # Copy response
-        response_content = await automation.copy_response()
-        
-        return response_content
-        
-    except Exception as e:
-        logging.error(f"Error in automation process: {e}")
-        return f"[Error: Automation failed - {str(e)}]"
+    for attempt in range(max_retries):
+        try:
+            # Use the global automation instance, which should be initialized at startup
+            if not automation.is_browser_ready():
+                logging.error("Browser is not initialized. Please restart the server.")
+                return None # No point in retrying
+
+            if not automation.is_authenticated:
+                # This could happen if the user was prompted to log in but hasn't yet.
+                logging.error("Not authenticated with Google. Please log in via the browser window.")
+                return None # No point in retrying
+            
+            # Save transformed request to file
+            abs_file_path = os.path.abspath(TRANSFORMED_REQUEST_FILE)
+            with open(abs_file_path, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(transformed_data, indent=2))
+            
+            # Upload to Google Drive
+            await automation.upload_to_drive(abs_file_path)
+            
+            # Run AI Studio prompt
+            await automation.run_ai_studio_prompt()
+            
+            # Copy response
+            response_content = await automation.copy_response()
+
+            # Check if the copy operation itself returned a string indicating an error
+            if isinstance(response_content, str) and response_content.startswith("[Error:"):
+                raise Exception(f"Copy response operation failed: {{response_content}}")
+            
+            return response_content # Success
+            
+        except Exception as e:
+            logging.error(f"Error in automation process (attempt {{attempt + 1}}/{{max_retries}}): {{e}}")
+            if attempt < max_retries - 1:
+                logging.info(f"Retrying in {{retry_delay}} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logging.error("All retry attempts failed.")
+                return None # Indicate final failure
 
 
 # --- API Endpoint ---
@@ -688,7 +703,7 @@ def chat_completions():
         pretty_request = json.dumps(transformed_data, indent=2)
 
         print("="*50)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] INCOMING REQUEST (Stream: {is_streaming})")
+        print(f"[{{datetime.now().strftime('%H:%M:%S')}}] INCOMING REQUEST (Stream: {{is_streaming}})")
         print("="*50)
           # Display original request
         print("--- Original Request ---")
@@ -699,16 +714,22 @@ def chat_completions():
         print(pretty_request)
         pyperclip.copy(pretty_request)
         
-        print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
+        print(f"\n[INFO] Transformed request saved to '{{TRANSFORMED_REQUEST_FILE}}'")
         print("[INFO] Starting automated AI Studio process...")
+        
         # Process request using the centralized automation runner
-        try:
-            ai_response_content = automation_runner.run_coroutine(
-                process_request_with_automation(transformed_data)
-            )
-        except Exception as e:
-            print(f"[ERROR] Automation failed: {e}")
-            ai_response_content = f"[Error: Automation failed - {str(e)}]"
+        ai_response_content = automation_runner.run_coroutine(
+            process_request_with_automation(transformed_data)
+        )
+
+        if ai_response_content is None:
+            # Automation failed after all retries. Error is logged to the terminal.
+            # Return a server error response instead of putting error in content.
+            return jsonify({"error": {
+                "message": "Request failed after multiple attempts. Please check the server logs for more details.",
+                "type": "server_error",
+                "code": "automation_failed"
+            }}), 500
 
         response_id = f"chatcmpl-{uuid.uuid4().hex}"
         model_name = "ai-studio-automated-v1"
@@ -717,18 +738,18 @@ def chat_completions():
             print("\n--- SENDING STREAMING RESPONSE ---")
             return Response(stream_generator(response_id, model_name, ai_response_content), mimetype='text/event-stream')
         else:
-            response_payload = {
+            response_payload = {{
                 "id": response_id, "object": "chat.completion", "created": int(time.time()), "model": model_name,
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": ai_response_content}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-            }
+                "choices": [{{"index": 0, "message": {{"role": "assistant", "content": ai_response_content}}, "finish_reason": "stop"}}],
+                "usage": {{"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}
+            }}
             print("\n--- SENDING NON-STREAMING RESPONSE ---")
             print(json.dumps(response_payload, indent=2))
             return jsonify(response_payload)
 
     except Exception as e:
-        print(f"[ERROR] An error occurred: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"An unexpected error occurred in the chat completions endpoint: {e}", exc_info=True)
+        return jsonify({"error": "An unexpected server error occurred."}), 500
 
 async def setup_automation():
     """Initialize browser automation for the server."""

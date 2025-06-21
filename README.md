@@ -37,8 +37,8 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
 - Follow instructions, read the Terms & Conditions, Privacy Policy, and Generative AI Use Policy, and accept.
 - Click on the settings gear in the top right, make sure Autosave is selected to on.
 - Select "Chat" from the top left or go to [https://aistudio.google.com/prompts/new_chat](https://aistudio.google.com/prompts/new_chat)
-- Type in anything to the chatbox and send it. It doesn't matter! We do need this for later. Maybe ask for the best code 
-- Click on the pencil next to the chat name. The chat name is based on what you typed in.
+- Type in anything to the chatbox and send it. It doesn't matter! We do need this for later.
+- Click on the pencil next to the chat name. The chat name is based on what you typed in for the previous step.
 - Edit the title to be "CodeRequest" and do not set a description.
 - Save the url you are currently at and put it in the aistudio_url part of the config.json file (example: https://aistudio.google.com/prompts/1XwZtRWO1_TiAb7S3Dnm9iveQzDj1cgbR)
 
@@ -143,6 +143,19 @@ However, Windows, MacOS, and many Linux Distros have a solution.
 - For Linux outside of Gnome/Ubuntu, it depends on your desktop environment. It's likely yours supports it.
 
 OR, if you are ok with seeing the terminal and chromium window in the taskbar, you can minimize them entirely.
+
+### Help! Google Drive says "Upload Failed" when the "CodeRequest" File is uploading!
+
+Google Drive appears to sometimes block reuploads of a certain file after about 300 times. (So 300 requests)
+
+- Delete the CodeRequest file on Google Drive from the Google Drive folder.
+- Go to back to AI Studio
+- Click on the settings gear in the top right, make sure Autosave is selected to on.
+- Select "Chat" from the top left or go to [https://aistudio.google.com/prompts/new_chat](https://aistudio.google.com/prompts/new_chat)
+- Type in anything to the chatbox and send it.
+- Click on the pencil next to the chat name. The chat name is based on what you typed in for the previous step.
+- Edit the title to be "CodeRequest" and do not set a description.
+- Save the url you are currently at and put it in the aistudio_url part of the config.json file (example: https://aistudio.google.com/prompts/1XwZtRWO1_TiAb7S3Dnm9iveQzDj1cgbR), this is different then the old url.
 
 ## Security Notes
 
