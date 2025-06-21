@@ -94,18 +94,18 @@ Before running the server, you need to configure the `config.json` file:
 
 Example: Cline
 
-API Provider: OpenAI Compatible
-Base URL: http://127.0.0.1:8383/v1/
-API Key: You can set this to anything you want.
-Model ID: Again, whatever you want. The model is controlled through config.json however in the future I might have it through here.
+- API Provider: OpenAI Compatible
+- Base URL: http://127.0.0.1:8383/v1/
+- API Key: You can set this to anything you want.
+- Model ID: Again, whatever you want. The model is controlled through config.json however in the future I might have it through here.
 
 Example: Roo Code
 
-API Provider: OpenAI Compatible
-Base URL: http://127.0.0.1:8383/v1/
-Model ID: Pre-Filled to gpt-4o. It's not really GPT 4o but is only a visual. Set to anything you like. The real model is controlled at config.json
-Scroll down, set Context Window Size to 1000000
-Scroll down, deselect Image Support.
+- API Provider: OpenAI Compatible
+- Base URL: http://127.0.0.1:8383/v1/
+- Model ID: Pre-Filled to gpt-4o. It's not really GPT 4o but is only a visual. Set to anything you like. The real model is controlled at config.json
+- Scroll down, set Context Window Size to 1000000
+- Scroll down, deselect Image Support.
 
 Example: Cursor
 
