@@ -10,6 +10,30 @@ import asyncio
 import os
 from playwright.async_api import async_playwright
 import logging
+import atexit
+
+# --- Async Runner ---
+class AsyncAutomationRunner:
+    def __init__(self):
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.start_loop, daemon=True)
+        self.thread.start()
+
+    def start_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def stop_loop(self):
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+
+    def run_coroutine(self, coro):
+        """Run a coroutine in the event loop and wait for the result."""
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result()
+
+automation_runner = AsyncAutomationRunner()
+
 
 # --- Configuration Loading ---
 def load_config():
@@ -87,73 +111,35 @@ class AIStudioAutomation:
     async def check_authentication(self, headless_mode=None):
         """Check if user is authenticated with Google"""
         try:
-            # If we're in headless mode, create a temporary non-headless browser for auth check
-            if headless_mode and HEADLESS_MODE:
-                logging.info("Headless mode detected - creating temporary visible browser for authentication check")
-                temp_playwright = await async_playwright().start()
-                temp_browser = await temp_playwright.chromium.launch_persistent_context(
-                    user_data_dir=BROWSER_DATA_DIR,
-                    headless=False,  # Force non-headless for auth check
-                    args=['--no-first-run', '--disable-blink-features=AutomationControlled']
-                )
+            if headless_mode:
+                logging.info("Running in headless mode. Authentication must be pre-existing.")
+
+            await self.page.goto('https://accounts.google.com/')
+            await self.page.wait_for_load_state('networkidle')
+            
+            # Multiple ways to check if authenticated
+            current_url = self.page.url
+            is_authenticated = (
+                'myaccount.google.com' in current_url or 
+                'accounts.google.com/ManageAccount' in current_url or
+                'accounts.google.com/b/' in current_url  # Business accounts
+            )
+            
+            # Additional check: look for authentication cookies
+            if not is_authenticated:
+                cookies = await self.page.context.cookies()
+                auth_cookies = [c for c in cookies if c['name'] in ['SAPISID', 'SSID', 'HSID', 'APISID']]
+                is_authenticated = len(auth_cookies) > 0
                 
-                if temp_browser.pages:
-                    temp_page = temp_browser.pages[0]
-                else:
-                    temp_page = await temp_browser.new_page()
-                  # Check authentication with the temporary browser
-                await temp_page.goto('https://accounts.google.com/')
-                await temp_page.wait_for_load_state('networkidle')
-                
-                # Multiple ways to check if authenticated
-                current_url = temp_page.url
-                is_authenticated = (
-                    'myaccount.google.com' in current_url or 
-                    'accounts.google.com/ManageAccount' in current_url or
-                    'accounts.google.com/b/' in current_url  # Business accounts
-                )
-                
-                # Additional check: look for authentication cookies
-                if not is_authenticated:
-                    cookies = await temp_page.context.cookies()
-                    auth_cookies = [c for c in cookies if c['name'] in ['SAPISID', 'SSID', 'HSID', 'APISID']]
-                    is_authenticated = len(auth_cookies) > 0
-                    
-                if is_authenticated:
-                    self.is_authenticated = True
-                    logging.info("User is already authenticated with Google")
-                else:
-                    self.is_authenticated = False
-                    logging.info("User needs to authenticate with Google")
-                
-                # Clean up temporary browser
-                await temp_browser.close()
-                await temp_playwright.stop()
-            else:                # Use the main browser for authentication check (non-headless mode)
-                await self.page.goto('https://accounts.google.com/')
-                await self.page.wait_for_load_state('networkidle')
-                
-                # Multiple ways to check if authenticated
-                current_url = self.page.url
-                is_authenticated = (
-                    'myaccount.google.com' in current_url or 
-                    'accounts.google.com/ManageAccount' in current_url or
-                    'accounts.google.com/b/' in current_url  # Business accounts
-                )
-                
-                # Additional check: look for authentication cookies
-                if not is_authenticated:
-                    cookies = await self.page.context.cookies()
-                    auth_cookies = [c for c in cookies if c['name'] in ['SAPISID', 'SSID', 'HSID', 'APISID']]
-                    is_authenticated = len(auth_cookies) > 0
-                    
-                if is_authenticated:
-                    self.is_authenticated = True
-                    logging.info("User is already authenticated with Google")
-                else:
-                    self.is_authenticated = False
-                    logging.info("User needs to authenticate with Google")
-                
+            if is_authenticated:
+                self.is_authenticated = True
+                logging.info("User is already authenticated with Google")
+            else:
+                self.is_authenticated = False
+                logging.info("User needs to authenticate with Google")
+                if not headless_mode:
+                    logging.warning("Please log in to the browser window to authenticate.")
+            
         except Exception as e:
             logging.error(f"Error checking authentication: {e}")
             self.is_authenticated = False
@@ -559,9 +545,10 @@ class AIStudioAutomation:
     
     def is_browser_ready(self):
         """Check if browser is ready for use"""
-        return (self.browser is not None and 
-                not self.browser.is_closed() and 
-                self.page is not None)
+        # The BrowserContext object from launch_persistent_context doesn't have an is_closed() method.
+        # We check if the page is closed instead. If the context is closed, the page will be too.
+        return (self.browser is not None and
+                self.page is not None and not self.page.is_closed())
 
 # Global automation instance
 automation = AIStudioAutomation()
@@ -657,16 +644,17 @@ def stream_generator(response_id, model_name, content):
     yield f"data: {json.dumps(end_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
+
 async def process_request_with_automation(transformed_data):
-    """Process the request using browser automation"""
-    browser_automation = None
-    try:        # Create a fresh browser instance for this request
-        browser_automation = AIStudioAutomation()
-        await browser_automation.initialize_browser()  # Uses HEADLESS_MODE setting
-        
-        # Check authentication
-        if not browser_automation.is_authenticated:
-            return "[Error: Not authenticated with Google. Please run the server first to authenticate.]"
+    """Process the request using the global browser automation instance"""
+    try:
+        # Use the global automation instance, which should be initialized at startup
+        if not automation.is_browser_ready():
+            return "[Error: Browser is not initialized. Please restart the server.]"
+
+        if not automation.is_authenticated:
+            # This could happen if the user was prompted to log in but hasn't yet.
+            return "[Error: Not authenticated with Google. Please log in via the browser window and try again.]"
         
         # Save transformed request to file
         abs_file_path = os.path.abspath(TRANSFORMED_REQUEST_FILE)
@@ -674,26 +662,19 @@ async def process_request_with_automation(transformed_data):
             f.write(json.dumps(transformed_data, indent=2))
         
         # Upload to Google Drive
-        await browser_automation.upload_to_drive(abs_file_path)
+        await automation.upload_to_drive(abs_file_path)
         
         # Run AI Studio prompt
-        await browser_automation.run_ai_studio_prompt()
+        await automation.run_ai_studio_prompt()
         
         # Copy response
-        response_content = await browser_automation.copy_response()
+        response_content = await automation.copy_response()
         
         return response_content
         
     except Exception as e:
         logging.error(f"Error in automation process: {e}")
         return f"[Error: Automation failed - {str(e)}]"
-    finally:
-        # Clean up browser resources
-        if browser_automation:
-            try:
-                await browser_automation.close()
-            except:
-                pass
 
 
 # --- API Endpoint ---
@@ -719,17 +700,12 @@ def chat_completions():
         pyperclip.copy(pretty_request)
         
         print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
-        print("[INFO] Starting automated AI Studio process...")        # Process request using browser automation in the same event loop
+        print("[INFO] Starting automated AI Studio process...")
+        # Process request using the centralized automation runner
         try:
-            # Use a simple approach - create new loop each time but ensure browser is ready
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                ai_response_content = loop.run_until_complete(
-                    process_request_with_automation(transformed_data)
-                )
-            finally:
-                loop.close()
+            ai_response_content = automation_runner.run_coroutine(
+                process_request_with_automation(transformed_data)
+            )
         except Exception as e:
             print(f"[ERROR] Automation failed: {e}")
             ai_response_content = f"[Error: Automation failed - {str(e)}]"
@@ -755,42 +731,50 @@ def chat_completions():
         return jsonify({"error": str(e)}), 500
 
 async def setup_automation():
-    """Initialize browser automation for first-time authentication"""
-    temp_automation = AIStudioAutomation()
-    
+    """Initialize browser automation for the server."""
+    global automation
     print("Initializing browser automation...")
-    # Always use non-headless mode for authentication check during setup
-    await temp_automation.initialize_browser(headless=False)
-    
-    if not temp_automation.is_authenticated:
+
+    # Determine if this is the first run to decide on headless mode for setup
+    is_first_run = not os.path.exists(BROWSER_DATA_DIR)
+    headless_for_setup = HEADLESS_MODE and not is_first_run
+
+    await automation.initialize_browser(headless=headless_for_setup)
+
+    if not automation.is_authenticated:
         print("="*60)
-        print("FIRST TIME SETUP REQUIRED")
+        print("AUTHENTICATION REQUIRED")
         print("="*60)
-        print("Please log in to your Google account in the browser window that opened.")
-        print("After logging in, close this program and restart it.")
-        print("Authentication state will be saved for future use.")
-        print("="*60)
-        
-        # Keep browser open for authentication
-        input("Press Enter after logging in to close the program...")
-        await temp_automation.close()
-        exit(0)
+        if headless_for_setup:
+            print("Server is in headless mode, but authentication is missing.")
+            print(f"Please run the server once with 'headless_mode': false in config.json to log in.")
+            await automation.close()
+            exit(1)
+        else:
+            print("Please log in to your Google account in the browser window that opened.")
+            print("After logging in, API requests will start working.")
+            print("You can then restart the server with headless_mode: true if desired.")
     else:
         print("Authentication verified. Ready to process requests.")
-        # Close the test browser
-        await temp_automation.close()
 
-def run_setup():
-    """Run initial setup if needed"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    try:
-        loop.run_until_complete(setup_automation())
-    finally:
-        loop.close()
 
 if __name__ == '__main__':
+    # Graceful shutdown
+    def shutdown_server():
+        print("\nShutting down server...")
+        if automation and automation.is_browser_ready():
+            print("Closing browser...")
+            try:
+                automation_runner.run_coroutine(automation.close())
+                print("Browser closed.")
+            except Exception as e:
+                print(f"Error closing browser: {e}")
+        
+        automation_runner.stop_loop()
+        print("Shutdown complete.")
+    
+    atexit.register(shutdown_server)
+
     print("="*60)
     print("   AI Studio Automated API Server - OpenAI Compatible")
     print("="*60)
@@ -798,18 +782,12 @@ if __name__ == '__main__':
     print(f"Browser Mode: {'HEADLESS' if HEADLESS_MODE else 'VISIBLE'}")
     print(f"Drive Folder: {DRIVE_FOLDER_URL}")
     print(f"AI Studio URL: {AISTUDIO_URL}")
-    print("\nTo modify settings, edit config.json file.")
-    #print("\nWhen Visual Debug Mode is enabled, you'll see:")
-    #print("- Red/Yellow cursor showing mouse position")
-    #print("- Button highlighting (red borders)")
-    #print("- Red dot = button center, Green dot = hover target")
-    #print("- Color changes during different actions")
-    print("\nConfigure your client application with the Base URL:")
-    print(f" -> http://{HOST}:{PORT}/v1")
-    print("\nTo stop the server, press CTRL+C in this window. Or, close the terminal window.")
     
-    # Run initial setup
-    run_setup()
+    # Run setup to initialize browser and check for authentication
+    print("\nInitializing browser and checking authentication...")
+    automation_runner.run_coroutine(setup_automation())
     
-    # Start the Flask server
-    app.run(host=HOST, port=PORT, debug=False)
+    print(f"\nServer starting at http://{HOST}:{PORT}")
+    print("="*60)
+    
+    app.run(host=HOST, port=PORT)
