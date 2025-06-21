@@ -17,8 +17,8 @@
     "transformed_request_file": "CodeRequest"
   },
   "urls": {
-    "drive_folder_url": "https://drive.google.com/drive/folders/FILL_IN_YOUR_FOLDER_URL",
-    "aistudio_url": "https://aistudio.google.com/app/prompts/FILL_IN_YOUR_PROMPT_URL"
+    "drive_folder_url": "https://drive.google.com/drive/u/2/folders/1fGd5atPaKuuVj8k5M8V4ZvblXHI9y95O",
+    "aistudio_url": "https://aistudio.google.com/app/u/2/prompts/1krB5jGaqT9_5iNPGMcjTejpUfUE-g8v1"
   },
   "gemini": {
     "model": "models/gemini-2.5-pro",

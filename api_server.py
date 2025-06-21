@@ -75,30 +75,84 @@ class AIStudioAutomation:
             user_data_dir=BROWSER_DATA_DIR,
             headless=headless,
             args=['--no-first-run', '--disable-blink-features=AutomationControlled']        )
-        
-        # Check if we have existing authentication
+          # Check if we have existing authentication
         pages = self.browser.pages
         if pages:
             self.page = pages[0]
         else:
             self.page = await self.browser.new_page()
         
-        await self.check_authentication()
+        await self.check_authentication(headless)
     
-    async def check_authentication(self):
+    async def check_authentication(self, headless_mode=None):
         """Check if user is authenticated with Google"""
         try:
-            await self.page.goto('https://accounts.google.com/')
-            await self.page.wait_for_load_state('networkidle')
-            
-            # Check if we're already logged in
-            current_url = self.page.url
-            if 'myaccount.google.com' in current_url or 'accounts.google.com/ManageAccount' in current_url:
-                self.is_authenticated = True
-                logging.info("User is already authenticated with Google")
-            else:
-                self.is_authenticated = False
-                logging.info("User needs to authenticate with Google")
+            # If we're in headless mode, create a temporary non-headless browser for auth check
+            if headless_mode and HEADLESS_MODE:
+                logging.info("Headless mode detected - creating temporary visible browser for authentication check")
+                temp_playwright = await async_playwright().start()
+                temp_browser = await temp_playwright.chromium.launch_persistent_context(
+                    user_data_dir=BROWSER_DATA_DIR,
+                    headless=False,  # Force non-headless for auth check
+                    args=['--no-first-run', '--disable-blink-features=AutomationControlled']
+                )
+                
+                if temp_browser.pages:
+                    temp_page = temp_browser.pages[0]
+                else:
+                    temp_page = await temp_browser.new_page()
+                  # Check authentication with the temporary browser
+                await temp_page.goto('https://accounts.google.com/')
+                await temp_page.wait_for_load_state('networkidle')
+                
+                # Multiple ways to check if authenticated
+                current_url = temp_page.url
+                is_authenticated = (
+                    'myaccount.google.com' in current_url or 
+                    'accounts.google.com/ManageAccount' in current_url or
+                    'accounts.google.com/b/' in current_url  # Business accounts
+                )
+                
+                # Additional check: look for authentication cookies
+                if not is_authenticated:
+                    cookies = await temp_page.context.cookies()
+                    auth_cookies = [c for c in cookies if c['name'] in ['SAPISID', 'SSID', 'HSID', 'APISID']]
+                    is_authenticated = len(auth_cookies) > 0
+                    
+                if is_authenticated:
+                    self.is_authenticated = True
+                    logging.info("User is already authenticated with Google")
+                else:
+                    self.is_authenticated = False
+                    logging.info("User needs to authenticate with Google")
+                
+                # Clean up temporary browser
+                await temp_browser.close()
+                await temp_playwright.stop()
+            else:                # Use the main browser for authentication check (non-headless mode)
+                await self.page.goto('https://accounts.google.com/')
+                await self.page.wait_for_load_state('networkidle')
+                
+                # Multiple ways to check if authenticated
+                current_url = self.page.url
+                is_authenticated = (
+                    'myaccount.google.com' in current_url or 
+                    'accounts.google.com/ManageAccount' in current_url or
+                    'accounts.google.com/b/' in current_url  # Business accounts
+                )
+                
+                # Additional check: look for authentication cookies
+                if not is_authenticated:
+                    cookies = await self.page.context.cookies()
+                    auth_cookies = [c for c in cookies if c['name'] in ['SAPISID', 'SSID', 'HSID', 'APISID']]
+                    is_authenticated = len(auth_cookies) > 0
+                    
+                if is_authenticated:
+                    self.is_authenticated = True
+                    logging.info("User is already authenticated with Google")
+                else:
+                    self.is_authenticated = False
+                    logging.info("User needs to authenticate with Google")
                 
         except Exception as e:
             logging.error(f"Error checking authentication: {e}")
@@ -705,7 +759,8 @@ async def setup_automation():
     temp_automation = AIStudioAutomation()
     
     print("Initializing browser automation...")
-    await temp_automation.initialize_browser()  # Uses HEADLESS_MODE setting
+    # Always use non-headless mode for authentication check during setup
+    await temp_automation.initialize_browser(headless=False)
     
     if not temp_automation.is_authenticated:
         print("="*60)
