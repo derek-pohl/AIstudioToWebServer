@@ -11,30 +11,48 @@ import os
 from playwright.async_api import async_playwright
 import logging
 
-# --- Configuration ---
-HOST = '127.0.0.1'
-PORT = 8383
-HEADLESS_MODE = False  # Set to False to see the browser window during automation
-VISUAL_DEBUG_MODE = False  # Set to True to see visual cursor and button highlights during automation
+# --- Configuration Loading ---
+def load_config():
+    """Load configuration from config.json file"""
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"Error: config.json not found at {config_path}")
+        print("Please ensure config.json exists in the same directory as this script.")
+        exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in config.json: {e}")
+        exit(1)
 
-# Hover offset configuration (adjust these values to fine-tune hover positioning)
-HOVER_OFFSET_X = -15  # Negative values move left, positive values move right
-HOVER_OFFSET_Y = 10   # Negative values move up, positive values move down
+# Load configuration
+config = load_config()
 
-LOG_FILE = 'api_requests.log'
-TRANSFORMED_REQUEST_FILE = 'CodeRequest' # The file to save the transformed request (no extension)
+# Extract configuration values
+HOST = config['server']['host']
+PORT = config['server']['port']
+SECRET_KEY = config['server']['secret_key']
 
-# --- AI Studio Configuration ---
-DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1fGd5atPaKuuVj8k5M8V4ZvblXHI9y95O'  # Replace with your Google Drive folder URL
-AISTUDIO_URL = 'https://aistudio.google.com/app/prompts/1krB5jGaqT9_5iNPGMcjTejpUfUE-g8v1'    # Replace with your AI Studio project URL
-BROWSER_DATA_DIR = './browser_data'  # Local browser data storage
+HEADLESS_MODE = config['browser']['headless_mode']
+VISUAL_DEBUG_MODE = config['browser']['visual_debug_mode']
+BROWSER_DATA_DIR = config['browser']['data_dir']
+
+HOVER_OFFSET_X = config['hover_config']['offset_x']
+HOVER_OFFSET_Y = config['hover_config']['offset_y']
+
+LOG_FILE = config['files']['log_file']
+TRANSFORMED_REQUEST_FILE = config['files']['transformed_request_file']
+
+DRIVE_FOLDER_URL = config['urls']['drive_folder_url']
+AISTUDIO_URL = config['urls']['aistudio_url']
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Flask App Initialization ---
 app = flask.Flask(__name__)
-app.config['SECRET_KEY'] = 'a-super-secret-key-that-you-dont-need-to-change'
+app.config['SECRET_KEY'] = SECRET_KEY
 
 # --- Browser Automation Class ---
 class AIStudioAutomation:
@@ -156,8 +174,7 @@ class AIStudioAutomation:
                 except Exception as e2:
                     logging.error(f"Failed to click Upload button: {e2}")
                     raise
-            
-            # Wait for upload to process
+              # Wait for upload to process
             await asyncio.sleep(4)  # Adjust this as needed for internet speed, 4 is usually enough
             logging.info(f"File upload completed: {os.path.basename(file_path)}")
             
@@ -179,15 +196,19 @@ class AIStudioAutomation:
             initial_state = await run_button.get_attribute('aria-disabled')
             logging.info(f"Initial button state: aria-disabled='{initial_state}'")
             
+            # Wait before clicking the run button to ensure page is fully loaded
+            before_click_delay = config['timeouts']['before_run_button_click']
+            logging.info(f"Waiting {before_click_delay} seconds before clicking run button...")
+            await asyncio.sleep(before_click_delay)
+            
             await run_button.click()
             logging.info("Clicked Run button")
             
             # Wait a moment for the button state to change
             await asyncio.sleep(2)
-            
-            # Monitor the aria-disabled attribute - wait for it to become true (processing)
+              # Monitor the aria-disabled attribute - wait for it to become true (processing)
             logging.info("Waiting for AI Studio to start processing...")
-            max_wait_start = 1000  # longest i've seen aistudio take to finish processing is 1000 seconds for rextra long coding projects
+            max_wait_start = config['timeouts']['max_wait_start']  # longest i've seen aistudio take to finish processing is 1000 seconds for extra long coding projects
             wait_count = 0
             
             while wait_count < max_wait_start:
@@ -202,10 +223,9 @@ class AIStudioAutomation:
                 wait_count += 1
             
             if wait_count >= max_wait_start:
-                logging.warning("Timeout waiting for processing to start - continuing anyway")
-              # Wait for processing to complete - wait for aria-disabled to become false
+                logging.warning("Timeout waiting for processing to start - continuing anyway")              # Wait for processing to complete - wait for aria-disabled to become false
             logging.info("Waiting for AI Studio to complete processing...")
-            max_wait_complete = 1  # 1 seconds timeout to account for aistudio.google.com delay
+            max_wait_complete = config['timeouts']['max_wait_complete']  # 1 seconds timeout to account for aistudio.google.com delay
             wait_count = 0
             
             while wait_count < max_wait_complete:
@@ -223,10 +243,10 @@ class AIStudioAutomation:
             
             if wait_count >= max_wait_complete:
                 logging.warning("Timeout waiting for processing to complete - continuing anyway")
-            
-            # Wait additional 1 seconds as sometimes AI studio takes a moment to finalize
-            logging.info("Waiting additional 5 seconds...")
-            await asyncio.sleep(1)
+              # Wait additional seconds as sometimes AI studio takes a moment to finalize
+            additional_wait = config['timeouts']['additional_wait']
+            logging.info(f"Waiting additional {additional_wait} seconds...")
+            await asyncio.sleep(additional_wait)
             
         except Exception as e:
             logging.error(f"Error running AI Studio prompt: {e}")
@@ -493,15 +513,15 @@ class AIStudioAutomation:
 # Global automation instance
 automation = AIStudioAutomation()
 
-# --- Transformation Logic (Unchanged) ---
+# --- Transformation Logic (Updated to use config) ---
 def transform_to_gemini_format(openai_request_data):
     GEMINI_BOILERPLATE = {
       "runSettings": {
-        "temperature": 0.3,
-        "model": "models/gemini-2.5-pro", # Must be adjusted in the future when google comes out with new models
-        "topP": 0.95,
-        "topK": 64,
-        "maxOutputTokens": 65536,
+        "temperature": config['gemini']['temperature'],
+        "model": config['gemini']['model'], # Must be adjusted in the future when google comes out with new models
+        "topP": config['gemini']['top_p'],
+        "topK": config['gemini']['top_k'],
+        "maxOutputTokens": config['gemini']['max_output_tokens'],
         "safetySettings": [{
           "category": "HARM_CATEGORY_HARASSMENT",
           "threshold": "OFF"
@@ -515,12 +535,12 @@ def transform_to_gemini_format(openai_request_data):
           "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
           "threshold": "OFF"
         }],
-        "responseMimeType": "text/plain",
-        "enableCodeExecution": False,
-        "enableSearchAsATool": False,
-        "enableBrowseAsATool": False,
-        "enableAutoFunctionResponse": False,
-        "thinkingBudget": -1
+        "responseMimeType": config['gemini']['response_mime_type'],
+        "enableCodeExecution": config['gemini']['enable_code_execution'],
+        "enableSearchAsATool": config['gemini']['enable_search_as_tool'],
+        "enableBrowseAsATool": config['gemini']['enable_browse_as_tool'],
+        "enableAutoFunctionResponse": config['gemini']['enable_auto_function_response'],
+        "thinkingBudget": config['gemini']['thinking_budget']
       },
       "systemInstruction": {},
       "chunkedPrompt": {
@@ -563,10 +583,8 @@ def transform_to_gemini_format(openai_request_data):
 # --- Unchanged Functions ---
 # --- Helper Functions ---
 def log_to_file(content):
-    with open(LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"--- Log Entry: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        f.write(content)
-        f.write("\n\n")
+    """Log function disabled - no longer saving to file"""
+    pass  # Logging disabled
 
 def stream_generator(response_id, model_name, content):
     start_chunk = {
@@ -638,10 +656,8 @@ def chat_completions():
         print("="*50)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] INCOMING REQUEST (Stream: {is_streaming})")
         print("="*50)
-        
-        # Log original request
-        print("--- Original Request (for logging) ---")
-        log_to_file(json.dumps(request_data, indent=2))
+          # Display original request
+        print("--- Original Request ---")
         print(json.dumps(request_data, indent=2))
         
         # Display, copy, and save the transformed request
@@ -717,33 +733,26 @@ def run_setup():
     
     try:
         loop.run_until_complete(setup_automation())
-    finally:        loop.close()
+    finally:
+        loop.close()
 
 if __name__ == '__main__':
     print("="*60)
     print("   AI Studio Automated API Server - OpenAI Compatible")
     print("="*60)
-    print(f"\nServer starting on http://{HOST}:{PORT}")
-    print("This version supports both STREAMING and NON-STREAMING requests.")
-    print(">>> FULLY AUTOMATED VERSION USING PLAYWRIGHT <<<")
-    print(f"\nBrowser Mode: {'HEADLESS' if HEADLESS_MODE else 'VISIBLE'}")
-    print(f"Visual Debug Mode: {'ENABLED' if VISUAL_DEBUG_MODE and not HEADLESS_MODE else 'DISABLED'}")
-    print("(Change HEADLESS_MODE and VISUAL_DEBUG_MODE at the top of the script to toggle)")
-    print("\nIMPORTANT: Configure these URLs at the top of the script:")
-    print(f"- DRIVE_FOLDER_URL: {DRIVE_FOLDER_URL}")
-    print(f"- AISTUDIO_URL: {AISTUDIO_URL}")
-    print(f"- HEADLESS_MODE: {HEADLESS_MODE}")
-    print(f"- VISUAL_DEBUG_MODE: {VISUAL_DEBUG_MODE}")
-    print(f"- HOVER_OFFSET_X: {HOVER_OFFSET_X} (negative = left, positive = right)")
-    print(f"- HOVER_OFFSET_Y: {HOVER_OFFSET_Y} (negative = up, positive = down)")
-    print("\nWhen Visual Debug Mode is enabled, you'll see:")
-    print("- Red/Yellow cursor showing mouse position")
-    print("- Button highlighting (red borders)")
-    print("- Red dot = button center, Green dot = hover target")
-    print("- Color changes during different actions")
+    print(f"\nConfiguration loaded from config.json:")
+    print(f"Browser Mode: {'HEADLESS' if HEADLESS_MODE else 'VISIBLE'}")
+    print(f"Drive Folder: {DRIVE_FOLDER_URL}")
+    print(f"AI Studio URL: {AISTUDIO_URL}")
+    print("\nTo modify settings, edit config.json file.")
+    #print("\nWhen Visual Debug Mode is enabled, you'll see:")
+    #print("- Red/Yellow cursor showing mouse position")
+    #print("- Button highlighting (red borders)")
+    #print("- Red dot = button center, Green dot = hover target")
+    #print("- Color changes during different actions")
     print("\nConfigure your client application with the Base URL:")
     print(f" -> http://{HOST}:{PORT}/v1")
-    print("\nTo stop the server, press CTRL+C in this window.")
+    print("\nTo stop the server, press CTRL+C in this window. Or, close the terminal window.")
     
     # Run initial setup
     run_setup()

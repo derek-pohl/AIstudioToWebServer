@@ -1,0 +1,42 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8383,
+    "secret_key": "you-should-not-need-to-change-this-key"
+  },
+  "browser": {
+    "headless_mode": false,
+    "visual_debug_mode": false,
+    "data_dir": "./browser_data"
+  },
+  "hover_config": {
+    "offset_x": -15,
+    "offset_y": 10
+  },
+  "files": {
+    "log_file": "api_requests.log",
+    "transformed_request_file": "CodeRequest"
+  },
+  "urls": {
+    "drive_folder_url": "https://drive.google.com/drive/folders/FILL_IN_YOUR_FOLDER_URL",
+    "aistudio_url": "https://aistudio.google.com/app/prompts/FILL_IN_YOUR_PROMPT_URL",
+  },
+  "gemini": {
+    "model": "models/gemini-2.5-pro",
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "top_k": 64,
+    "max_output_tokens": 65536,
+    "response_mime_type": "text/plain",
+    "enable_code_execution": false,
+    "enable_search_as_tool": false,
+    "enable_browse_as_tool": false,
+    "enable_auto_function_response": false,
+    "thinking_budget": -1
+  },  "timeouts": {
+    "max_wait_start": 1000,
+    "max_wait_complete": 1,
+    "additional_wait": 1,
+    "before_run_button_click": 1
+  }
+}
