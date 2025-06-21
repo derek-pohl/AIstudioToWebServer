@@ -753,7 +753,7 @@ async def setup_automation():
         else:
             print("Please log in to your Google account in the browser window that opened.")
             print("After logging in, API requests will start working.")
-            print("You can then restart the server with headless_mode: true if desired.")
+            print("You must restart the program after logging in to continue with API requests.")
     else:
         print("Authentication verified. Ready to process requests.")
 
