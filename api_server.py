@@ -226,7 +226,7 @@ class AIStudioAutomation:
         try:
             await self.page.goto(AISTUDIO_URL)
             await self.page.wait_for_load_state('networkidle')
-            await asyncio.sleep(1) # Wait for the run button to fully load
+            await asyncio.sleep(2) # Wait for the run button to fully load
             
             # Find and click the Run button
             run_button = self.page.locator('button[aria-label="Run"]')
