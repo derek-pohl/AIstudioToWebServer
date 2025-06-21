@@ -111,6 +111,17 @@ Example: Cursor
 
 Just kidding! Cursor appears to let you do this, and then doesn't, or they make it intentionally very difficult if you choose not to log in or pay to use their services, claiming that you will lose features if you use your own api key. I couldn't figure it out. However, I strongly recomend Roo or Cline.
 
+### Help! This annoying Chromium window pops up and gets in my way each time I make a request! Make it go away!
+
+Currently Headless mode doesn't work for Google AI Studio or Google Drive, so the browser does need to be "headed." otherwise the program does not work. Basically, the browser needs to stay on the screen. I'm working on making this not be an issue, possibly through docker.
+
+However, Windows, MacOS, and many Linux Distros have a solution.
+
+- For Windows (10 or 11): (Windows key + Tab), then click "New desktop" and click into that desktop. Open the program in that desktop, then switch to this desktop. The program will work in the backround without getting in your way.
+- For Mac, enter Mission Control. In the Spaces bar, click +, this is pretty similar to Windows.
+- For Gnome on Linux (also Ubuntu): Open the Activities overview. Click on a workspace in the workspace selector on the right side of the screen to view the open windows on that workspace. Click on any window thumbnail to activate the workspace.
+- For Linux outside of Gnome/Ubuntu, it depends on your desktop environment. It's likely yours supports it.
+
 ### API Endpoint
 
 The server provides an OpenAI-compatible endpoint at:
@@ -151,7 +162,7 @@ AIstudioToWebServer/
 #### Browser Settings
 ```json
 "browser": {
-  "headless_mode": false,     // Run browser in background (true) or visible (false)
+  "headless_mode": false,     // Run browser in background (true) or visible (false). Must be kept to False.
   "visual_debug_mode": false, // Show visual debugging indicators
   "data_dir": "./browser_data" // Directory for browser data persistence
 }
