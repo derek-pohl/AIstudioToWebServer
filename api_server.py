@@ -41,7 +41,6 @@ BROWSER_DATA_DIR = config['browser']['data_dir']
 HOVER_OFFSET_X = config['hover_config']['offset_x']
 HOVER_OFFSET_Y = config['hover_config']['offset_y']
 
-LOG_FILE = config['files']['log_file']
 TRANSFORMED_REQUEST_FILE = config['files']['transformed_request_file']
 
 DRIVE_FOLDER_URL = config['urls']['drive_folder_url']

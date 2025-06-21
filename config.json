@@ -14,12 +14,11 @@
     "offset_y": 10
   },
   "files": {
-    "log_file": "api_requests.log",
     "transformed_request_file": "CodeRequest"
   },
   "urls": {
     "drive_folder_url": "https://drive.google.com/drive/folders/FILL_IN_YOUR_FOLDER_URL",
-    "aistudio_url": "https://aistudio.google.com/app/prompts/FILL_IN_YOUR_PROMPT_URL",
+    "aistudio_url": "https://aistudio.google.com/app/prompts/FILL_IN_YOUR_PROMPT_URL"
   },
   "gemini": {
     "model": "models/gemini-2.5-pro",
