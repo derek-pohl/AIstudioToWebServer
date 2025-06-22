@@ -92,24 +92,72 @@ Before running the server, you need to configure the `config.json` file:
 
 ### Vibecoding Setup (what else were you going to use this program for anyways???)
 
-Example: Cline
+Recomended: Cline, Roo Code, and Kilo Code. (in no specific order, try all 3 if you wish)
+
+Also supported: Aider, Continue, anything that supports an "OpenAI Compatible API"
+
+Not Supported (Limitations set by developer): Cursor, Windsurf, and many other editors that require you to pay a set price per month.
+
+#### Example: Cline (easiest)
+
+Settings -> API Configuration
 
 - API Provider: OpenAI Compatible
 - Base URL: http://127.0.0.1:8383/v1/
 - API Key: You can set this to anything you want.
 - Model ID: Again, whatever you want. The model is controlled through config.json however in the future I might have it through here.
 
-Example: Roo Code
+#### Example: Roo Code (easy)
+
+Settings -> Providers
 
 - API Provider: OpenAI Compatible
 - Base URL: http://127.0.0.1:8383/v1/
+- API Key: You can set this to anything you want.
 - Model ID: Pre-Filled to gpt-4o. It's not really GPT 4o but is only a visual. Set to anything you like. The real model is controlled at config.json
+- Scroll down, set Context Window Size to 1000000 (optional)
+- Scroll down, deselect Image Support. (optional)
+
+#### Example: Kilo Code (easy, what I use and is a mix between Cline and Roo Code)
+
+- API Provider: OpenAI Compatible
+- Base URL: http://127.0.0.1:8383/v1/
+- API Key: You can set this to anything you want.
+- Model ID: Pre-Filled to gpt-4o. Instead, type in "Gemini" and click "Use custom: Gemini"
 - Scroll down, set Context Window Size to 1000000
 - Scroll down, deselect Image Support.
 
-Example: Cursor
+#### Example: Continue (also known as Continue.dev) with VS Code.
 
-Just kidding! Cursor appears to let you do this, and then doesn't, or they make it intentionally very difficult if you choose not to log in or pay to use their services, claiming that you will lose features if you use your own api key. I couldn't figure it out. However, I strongly recomend Roo or Cline.
+If you prefer Continue, great! However, setup for a new user is confusing along with using a custom API. I recomend the more popular Cline or Roo Code instead.
+
+If downloading for the first time, you will be asked to sign in. Don't, you don't need to.
+
+1. Go to the "Select Model" Tab
+
+2. Click "+ Add Chat Model" and choose Provider:OpenAI and Model GPT-4o. Enter any string of text as an API key, eg, "apikey"
+
+3. A config.yaml file should have opened in VS Code. If it didn't, Click "GPT-4o," then click the settings gear icon that appears to the left of the "Models" text
+
+5. Below "apiKey:" add this: apiBase: "http://127.0.0.1:8383/v1/"
+
+4. In the config.yaml file that opened, if you wish, change the name to "Gemini" from "GPT-4o" and DO NOT change the model from gpt-4o to anything else. Otherwise this disables agent mode.
+
+6. Unrelated, but continue.dev makes an api call for every new chat (to give the chat a title). This can be slow with this program. I would recommend you go into settings (gear, top right), and turn off "Enable Session Titles".
+
+7. Still unrelated but recommended. In settings -> Experimental Settings, Turn on Auto-Accept Agent Edits if you want similar functionality to Cline or Roo auto-accept.
+
+Example:
+
+name: Local Assistant
+version: 1.0.0
+schema: v1
+models:
+  - name: Gemini
+    provider: openai
+    model: Gemini
+    apiKey: apikey
+    apiBase: "http://127.0.0.1:8383/v1/"
 
 ### API Endpoint
 
