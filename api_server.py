@@ -641,7 +641,7 @@ def stream_generator(response_id, model_name, content):
         "id": response_id, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name,
         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
     }
-    yield f"data: {{json.dumps(end_chunk)}}\n\n"
+    yield f"data: {json.dumps(end_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
 

@@ -17,8 +17,8 @@
     "transformed_request_file": "CodeRequest"
   },
   "urls": {
-    "drive_folder_url": "https://drive.google.com/drive/FILL_IN_YOUR_FOLDER_URL_HERE",
-    "aistudio_url": "https://aistudio.google.com/app/FILL_IN_PROMPT_URL_HERE"
+    "drive_folder_url": "https://drive.google.com/drive/u/2/folders/1fGd5atPaKuuVj8k5M8V4ZvblXHI9y95O",
+    "aistudio_url": "https://aistudio.google.com/app/u/2/prompts/1ywMzlGlCWjf_FbvJAWRTUCU_zfUmWj76"
   },
   "gemini": {
     "model": "models/gemini-2.5-pro",
@@ -34,7 +34,7 @@
     "thinking_budget": -1
   },  "timeouts": {
     "max_wait_start": 1000,
-    "max_wait_complete": 1,
+    "max_wait_complete": 4,
     "additional_wait": 1,
     "before_run_button_click": 1
   }
