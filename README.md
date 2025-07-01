@@ -98,7 +98,7 @@ Also supported: Aider, Continue, anything that supports an "OpenAI Compatible AP
 
 Not Supported (Limitations set by developer): Cursor, Windsurf, and many other editors that require you to pay a set price per month.
 
-#### Example: Cline (easiest)
+#### Example: Cline (easiest, what I use)
 
 Settings -> API Configuration
 
@@ -106,6 +106,10 @@ Settings -> API Configuration
 - Base URL: http://127.0.0.1:8383/v1/
 - API Key: You can set this to anything you want.
 - Model ID: Again, whatever you want. The model is controlled through config.json however in the future I might have it through here.
+
+#### Example of Cline in use when turning a CLI game into pygame
+
+[![Watch the video](https://img.youtube.com/vi/hBelh9fvBFs/maxresdefault.jpg)](https://www.youtube.com/watch?v=hBelh9fvBFs)
 
 #### Example: Roo Code (easy)
 
@@ -118,7 +122,7 @@ Settings -> Providers
 - Scroll down, set Context Window Size to 1000000 (optional)
 - Scroll down, deselect Image Support. (optional)
 
-#### Example: Kilo Code (easy, what I use and is a mix between Cline and Roo Code)
+#### Example: Kilo Code (mix between Cline and Roo Code)
 
 - API Provider: OpenAI Compatible
 - Base URL: http://127.0.0.1:8383/v1/
@@ -153,7 +157,7 @@ name: Local Assistant
 version: 1.0.0
 schema: v1
 models:
-  - name: Gemini
+    name: Gemini
     provider: openai
     model: Gemini
     apiKey: apikey
