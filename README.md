@@ -24,6 +24,8 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
    - Copies the markdown response
 5. **Response Delivery**: Returns response in OpenAI-compatible format
 
+[See it in action! (youtube)](https://www.youtube.com/watch?v=hBelh9fvBFs)
+
 ## Prerequisites
 
 - Python 3.7 or higher
@@ -56,8 +58,7 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
 
 1. **Download**: Go to the [Releases page](https://github.com/derek-pohl/AIstudioToWebServer/releases) and download:
    - Windows: `ai-studio-server-windows.zip`
-   - macOS: `ai-studio-server-macos.tar.gz`
-   - Linux: `ai-studio-server-linux.tar.gz`
+   - macOS: `ai-studio-server-macos.zip`
 
 2. **Extract** the archive to a folder of your choice
 
