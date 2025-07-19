@@ -54,7 +54,7 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
 
 **No Python installation required!** Just download and run.
 
-1. **Download**: Go to the [Releases page](https://github.com/YOUR_USERNAME/YOUR_REPO/releases) and download:
+1. **Download**: Go to the [Releases page](https://github.com/derek-pohl/AIstudioToWebServer/releases) and download:
    - Windows: `ai-studio-server-windows.zip`
    - macOS: `ai-studio-server-macos.tar.gz`
    - Linux: `ai-studio-server-linux.tar.gz`
