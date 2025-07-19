@@ -780,6 +780,20 @@ async def setup_automation():
     """Initialize browser automation for the server."""
     global automation
     print("Initializing browser automation...")
+    
+    # Set environment variable to help find browsers when running as executable
+    if getattr(sys, 'frozen', False):
+        # Running as executable - try to find and set browser path
+        browser_paths = [
+            os.path.expanduser('~/AppData/Local/ms-playwright'),
+            os.path.expanduser('~/.cache/ms-playwright'),
+        ]
+        
+        for path in browser_paths:
+            if os.path.exists(path):
+                os.environ['PLAYWRIGHT_BROWSERS_PATH'] = path
+                print(f"Set browser path to: {path}")
+                break
 
     # Determine if this is the first run to decide on headless mode for setup
     is_first_run = not os.path.exists(BROWSER_DATA_DIR)
