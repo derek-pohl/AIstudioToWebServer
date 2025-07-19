@@ -50,23 +50,32 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
 
 ## Installation
 
-### Option 1: Download Pre-built Executable (Recommended)
+### Option 1: Download Pre-built Executable (Recommended) ⭐
 
-1. Go to the [Releases page](https://github.com/YOUR_USERNAME/YOUR_REPO/releases)
-2. Download the appropriate version for your operating system:
+**No Python installation required!** Just download and run.
+
+1. **Download**: Go to the [Releases page](https://github.com/YOUR_USERNAME/YOUR_REPO/releases) and download:
    - Windows: `ai-studio-server-windows.zip`
    - macOS: `ai-studio-server-macos.tar.gz`
    - Linux: `ai-studio-server-linux.tar.gz`
-3. Extract the archive to a folder of your choice
-4. **FIRST TIME ONLY**: Install Playwright browsers by opening Command Prompt/Terminal and running:
+
+2. **Extract** the archive to a folder of your choice
+
+3. **One-time browser setup**: Open Command Prompt/Terminal and run:
    ```bash
    python -m playwright install chromium
    ```
-   (If you don't have Python, install it from [python.org](https://python.org) first)
-5. Edit `config.json` with your URLs (see Configuration section below)
-6. Run the executable:
+   *(If you don't have Python, install it from [python.org](https://python.org) first)*
+
+4. **Configure**: Edit `config.json` with your Google Drive and AI Studio URLs
+
+5. **Run**: 
    - Windows: Double-click `ai-studio-server.exe`
-   - macOS/Linux: `./ai-studio-server` (you may need to make it executable first: `chmod +x ai-studio-server`)
+   - macOS/Linux: `./ai-studio-server`
+
+6. **First-time login**: Browser opens → Log in to Google → You're done!
+
+**That's it!** Your server runs at `http://127.0.0.1:8383` and works with any OpenAI-compatible coding tool.
 
 ### Option 2: Run from Source
 
