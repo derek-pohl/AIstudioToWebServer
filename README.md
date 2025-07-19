@@ -50,6 +50,26 @@ TLDR; The website aistudio.google.com allows the use of Google's Gemini AI model
 
 ## Installation
 
+### Option 1: Download Pre-built Executable (Recommended)
+
+1. Go to the [Releases page](https://github.com/YOUR_USERNAME/YOUR_REPO/releases)
+2. Download the appropriate version for your operating system:
+   - Windows: `ai-studio-server-windows.zip`
+   - macOS: `ai-studio-server-macos.tar.gz`
+   - Linux: `ai-studio-server-linux.tar.gz`
+3. Extract the archive to a folder of your choice
+4. **FIRST TIME ONLY**: Install Playwright browsers by opening Command Prompt/Terminal and running:
+   ```bash
+   python -m playwright install chromium
+   ```
+   (If you don't have Python, install it from [python.org](https://python.org) first)
+5. Edit `config.json` with your URLs (see Configuration section below)
+6. Run the executable:
+   - Windows: Double-click `ai-studio-server.exe`
+   - macOS/Linux: `./ai-studio-server` (you may need to make it executable first: `chmod +x ai-studio-server`)
+
+### Option 2: Run from Source
+
 1. Clone or download this repository.
 2. Install required dependencies from a terminal window located inside the folder:
    ```bash
@@ -74,15 +94,27 @@ Before running the server, you need to configure the `config.json` file:
 1. **Configure URLs**: Edit `config.json` and fill in your Google Drive folder URL and AI Studio prompt URL
 
 2. **First-time Authentication**: 
+   
+   **For Executable Users:**
+   - Windows: Double-click `ai-studio-server.exe`
+   - macOS/Linux: Run `./ai-studio-server` in terminal
+   
+   **For Source Code Users:**
    ```bash
    python api_server.py
    ```
+   
    - The server will open a browser window for Google authentication
    - Log in to your Google account (this can be a alt account, just any personal google account)
    - Authentication state will be saved for future use (so you don't have to log in again!)
    - Follow the on-screen instructions in the terminal
 
 3. **Subsequent Runs**:
+   
+   **For Executable Users:**
+   - Just run the executable again - authentication is saved
+   
+   **For Source Code Users:**
    ```bash
    python api_server.py
    ```

@@ -1,0 +1,88 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: ai-studio-server.exe
+            asset_name: ai-studio-server-windows.exe
+          - os: ubuntu-latest
+            artifact_name: ai-studio-server
+            asset_name: ai-studio-server-linux
+          - os: macos-latest
+            artifact_name: ai-studio-server
+            asset_name: ai-studio-server-macos
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Playwright browsers
+      run: python -m playwright install chromium
+
+    - name: Build executable
+      run: python build_executable.py
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.asset_name }}
+        path: dist/ai-studio-server-release/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Create release packages
+      run: |
+        mkdir -p release-packages
+        
+        # Windows package
+        cd ai-studio-server-windows.exe
+        zip -r ../release-packages/ai-studio-server-windows.zip .
+        cd ..
+        
+        # Linux package
+        cd ai-studio-server-linux
+        tar -czf ../release-packages/ai-studio-server-linux.tar.gz .
+        cd ..
+        
+        # macOS package
+        cd ai-studio-server-macos
+        tar -czf ../release-packages/ai-studio-server-macos.tar.gz .
+        cd ..
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release-packages/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

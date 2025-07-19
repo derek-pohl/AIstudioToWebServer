@@ -8,7 +8,6 @@ import uuid
 import threading
 import asyncio
 import os
-import sys
 from playwright.async_api import async_playwright
 import logging
 import atexit
@@ -39,14 +38,7 @@ automation_runner = AsyncAutomationRunner()
 # --- Configuration Loading ---
 def load_config():
     """Load configuration from config.json file"""
-    # Check if running as PyInstaller executable
-    if getattr(sys, 'frozen', False):
-        # Running as executable - look for config.json next to the executable
-        config_path = os.path.join(os.path.dirname(sys.executable), 'config.json')
-    else:
-        # Running as script - look for config.json next to the script
-        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-    
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -106,10 +98,8 @@ class AIStudioAutomation:
         self.browser = await self.playwright.chromium.launch_persistent_context(
             user_data_dir=BROWSER_DATA_DIR,
             headless=headless,
-            args=['--no-first-run', '--disable-blink-features=AutomationControlled']
-        )
-        
-        # Check if we have existing authentication
+            args=['--no-first-run', '--disable-blink-features=AutomationControlled']        )
+          # Check if we have existing authentication
         pages = self.browser.pages
         if pages:
             self.page = pages[0]
@@ -223,8 +213,7 @@ class AIStudioAutomation:
                 except Exception as e2:
                     logging.error(f"Failed to click Upload button: {e2}")
                     raise
-            
-            # Wait for upload to process
+              # Wait for upload to process
             await asyncio.sleep(4)  # Adjust this as needed for internet speed, 4 is usually enough
             logging.info(f"File upload completed: {os.path.basename(file_path)}")
             
@@ -256,8 +245,7 @@ class AIStudioAutomation:
             
             # Wait a moment for the button state to change
             await asyncio.sleep(2)
-            
-            # Monitor the aria-disabled attribute - wait for it to become true (processing)
+              # Monitor the aria-disabled attribute - wait for it to become true (processing)
             logging.info("Waiting for AI Studio to start processing...")
             max_wait_start = config['timeouts']['max_wait_start']  # longest i've seen aistudio take to finish processing is 1000 seconds for extra long coding projects
             wait_count = 0
@@ -274,9 +262,7 @@ class AIStudioAutomation:
                 wait_count += 1
             
             if wait_count >= max_wait_start:
-                logging.warning("Timeout waiting for processing to start - continuing anyway")
-            
-            # Wait for processing to complete - wait for aria-disabled to become false
+                logging.warning("Timeout waiting for processing to start - continuing anyway")              # Wait for processing to complete - wait for aria-disabled to become false
             logging.info("Waiting for AI Studio to complete processing...")
             max_wait_complete = config['timeouts']['max_wait_complete']  # 1 seconds timeout to account for aistudio.google.com delay
             wait_count = 0
@@ -290,23 +276,21 @@ class AIStudioAutomation:
                     
                 # Log every 10 seconds to show progress
                 if wait_count % 10 == 0:
-                    logging.info(f"Still processing... (waited {wait_count} seconds)")
-                    
+                    logging.info(f"Still processing... (waited {wait_count} seconds)")                    
                 await asyncio.sleep(1)
                 wait_count += 1
             
             if wait_count >= max_wait_complete:
                 logging.warning("Timeout waiting for processing to complete - continuing anyway")
-            
-            # Wait additional seconds as sometimes AI studio takes a moment to finalize
+              # Wait additional seconds as sometimes AI studio takes a moment to finalize
             additional_wait = config['timeouts']['additional_wait']
             logging.info(f"Waiting additional {additional_wait} seconds...")
             await asyncio.sleep(additional_wait)
             
         except Exception as e:
             logging.error(f"Error running AI Studio prompt: {e}")
-            raise   
- 
+            raise
+    
     async def copy_response(self):
         """Copy the markdown response from AI Studio"""
         try:
@@ -344,9 +328,7 @@ class AIStudioAutomation:
             
             if button_count > 0:
                 # Click the last options button (most recent response)
-                last_options_button = options_buttons.nth(button_count - 1)
-                
-                # Get the bounding box of the button to simulate more realistic mouse movement
+                last_options_button = options_buttons.nth(button_count - 1)                # Get the bounding box of the button to simulate more realistic mouse movement
                 button_box = await last_options_button.bounding_box()
                 logging.info(f"Button bounding box: {button_box}")
                 
@@ -354,8 +336,7 @@ class AIStudioAutomation:
                     # Calculate button center
                     center_x = button_box['x'] + button_box['width'] / 2
                     center_y = button_box['y'] + button_box['height'] / 2
-                    
-                    # Calculate hover target with offset (left and down from center)
+                      # Calculate hover target with offset (left and down from center)
                     # These values can be adjusted in the configuration section at the top
                     hover_offset_x = HOVER_OFFSET_X
                     hover_offset_y = HOVER_OFFSET_Y
@@ -394,8 +375,7 @@ class AIStudioAutomation:
                     await self.page.mouse.move(hover_x, hover_y)
                     logging.info(f"Mouse moved to hover target: ({hover_x}, {hover_y})")
                     await asyncio.sleep(1)  # Longer pause to see the positioning
-                    
-                    # Change cursor color to indicate hover attempt
+                      # Change cursor color to indicate hover attempt
                     if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
                         await self.page.evaluate("""
                             document.getElementById('visual-cursor').style.background = 'blue';
@@ -406,8 +386,7 @@ class AIStudioAutomation:
                     await last_options_button.hover()
                     logging.info("Element hover() method called")
                     await asyncio.sleep(2)  # Wait longer for hover effect to be visible
-                    
-                    # Highlight the button we're trying to click
+                      # Highlight the button we're trying to click
                     if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
                         await self.page.evaluate(f"""
                             const buttons = document.querySelectorAll('button[aria-label="Open options"]');
@@ -495,8 +474,7 @@ class AIStudioAutomation:
                 
                 # Find and click the copy markdown button
                 copy_button = self.page.locator('button:has-text("Copy markdown")')
-                
-                # Highlight the copy button if found
+                  # Highlight the copy button if found
                 copy_count = await copy_button.count()
                 if copy_count > 0:
                     if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
@@ -519,8 +497,7 @@ class AIStudioAutomation:
                 
                 # Wait for clipboard to update
                 await asyncio.sleep(2)
-                
-                # Remove visual indicators
+                  # Remove visual indicators
                 if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
                     await self.page.evaluate("""
                         const cursor = document.getElementById('visual-cursor');
@@ -532,8 +509,7 @@ class AIStudioAutomation:
                         const hoverMarker = document.getElementById('hover-marker');
                         if (hoverMarker) hoverMarker.remove();
                     """)
-                
-                # Get content from clipboard
+                  # Get content from clipboard
                 response_content = pyperclip.paste()
                 logging.info("Successfully copied response from AI Studio")
                 
@@ -543,8 +519,7 @@ class AIStudioAutomation:
                 return "[Error: Could not find options buttons]"
                 
         except Exception as e:
-            logging.error(f"Error copying response: {e}")
-            # Clean up visual indicators on error
+            logging.error(f"Error copying response: {e}")            # Clean up visual indicators on error
             if VISUAL_DEBUG_MODE and not HEADLESS_MODE:
                 try:
                     await self.page.evaluate("""
@@ -645,6 +620,7 @@ def transform_to_gemini_format(openai_request_data):
     transformed_data["chunkedPrompt"]["chunks"] = chunks
     return transformed_data
 
+# --- Unchanged Functions ---
 # --- Helper Functions ---
 def log_to_file(content):
     """Log function disabled - no longer saving to file"""
@@ -702,14 +678,14 @@ async def process_request_with_automation(transformed_data):
 
             # Check if the copy operation itself returned a string indicating an error
             if isinstance(response_content, str) and response_content.startswith("[Error:"):
-                raise Exception(f"Copy response operation failed: {response_content}")
+                raise Exception(f"Copy response operation failed: {{response_content}}")
             
             return response_content # Success
             
         except Exception as e:
-            logging.error(f"Error in automation process (attempt {attempt + 1}/{max_retries}): {e}")
+            logging.error(f"Error in automation process (attempt {{attempt + 1}}/{{max_retries}}): {{e}}")
             if attempt < max_retries - 1:
-                logging.info(f"Retrying in {retry_delay} seconds...")
+                logging.info(f"Retrying in {{retry_delay}} seconds...")
                 await asyncio.sleep(retry_delay)
             else:
                 logging.error("All retry attempts failed.")
@@ -727,10 +703,9 @@ def chat_completions():
         pretty_request = json.dumps(transformed_data, indent=2)
 
         print("="*50)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] INCOMING REQUEST (Stream: {is_streaming})")
+        print(f"[{{datetime.now().strftime('%H:%M:%S')}}] INCOMING REQUEST (Stream: {{is_streaming}})")
         print("="*50)
-        
-        # Display original request
+          # Display original request
         print("--- Original Request ---")
         print(json.dumps(request_data, indent=2))
         
@@ -739,7 +714,7 @@ def chat_completions():
         print(pretty_request)
         pyperclip.copy(pretty_request)
         
-        print(f"\n[INFO] Transformed request saved to '{TRANSFORMED_REQUEST_FILE}'")
+        print(f"\n[INFO] Transformed request saved to '{{TRANSFORMED_REQUEST_FILE}}'")
         print("[INFO] Starting automated AI Studio process...")
         
         # Process request using the centralized automation runner
@@ -763,11 +738,11 @@ def chat_completions():
             print("\n--- SENDING STREAMING RESPONSE ---")
             return Response(stream_generator(response_id, model_name, ai_response_content), mimetype='text/event-stream')
         else:
-            response_payload = {
+            response_payload = {{
                 "id": response_id, "object": "chat.completion", "created": int(time.time()), "model": model_name,
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": ai_response_content}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-            }
+                "choices": [{{"index": 0, "message": {{"role": "assistant", "content": ai_response_content}}, "finish_reason": "stop"}}],
+                "usage": {{"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}
+            }}
             print("\n--- SENDING NON-STREAMING RESPONSE ---")
             print(json.dumps(response_payload, indent=2))
             return jsonify(response_payload)
